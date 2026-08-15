@@ -1,0 +1,45 @@
+import streamlit as st
+from utils.db import get_conn
+
+st.title("Albaranes Finalizados")
+
+conn = get_conn()
+cur = conn.cursor()
+
+empresa_filtro = st.text_input("Filtrar por empresa")
+nombre_filtro = st.text_input("Filtrar por nombre")
+estado_filtro = st.selectbox("Estado", ["todos", "entrada", "procesando", "finalizado"])
+
+query = "SELECT * FROM albaranes WHERE 1=1"
+params = []
+
+if empresa_filtro:
+    query += " AND empresa LIKE ?"
+    params.append(f"%{empresa_filtro}%")
+
+if nombre_filtro:
+    query += " AND nombre LIKE ?"
+    params.append(f"%{nombre_filtro}%")
+
+if estado_filtro != "todos":
+    query += " AND estado = ?"
+    params.append(estado_filtro)
+
+cur.execute(query, params)
+resultados = cur.fetchall()
+
+for albaran in resultados:
+    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha = albaran
+
+    with st.expander(f"#{id_} - {nombre} ({empresa}) [{estado}]"):
+        st.write(f"Fecha: {fecha}")
+        st.write(f"Materiales:\n{materiales}")
+        st.write(f"Comentario: {comentario}")
+        st.write(f"Entrega: {envio_recogida}")
+        st.write(f"Observaciones: {obs}")
+        st.write(f"Mensaje final: {msg_final}")
+
+        if st.button(f"Finalizar definitivamente #{id_}"):
+            cur.execute("UPDATE albaranes SET estado='finalizado' WHERE id=?", (id_,))
+            conn.commit()
+            st.success("Albarán marcado como finalizado")
