@@ -52,7 +52,7 @@ if st.button("Enviar albarán"):
 
     ruta_excel = generar_excel(datos, id_albaran)
 
-    enviar_telegram(f"Nuevo albarán recibido: {id_albaran}")
+    enviar_telegram("Tienes un nuevo albarán")
 
     st.success("Albarán enviado correctamente")
     st.info(f"Excel generado en: {ruta_excel}")
