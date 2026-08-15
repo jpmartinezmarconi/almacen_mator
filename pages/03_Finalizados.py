@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.db import get_conn
+from utils.csv_storage import guardar_albaran_finalizado
 
 st.title("Albaranes Finalizados")
 
@@ -42,4 +43,26 @@ for albaran in resultados:
         if st.button(f"Finalizar definitivamente #{id_}"):
             cur.execute("UPDATE albaranes SET estado='finalizado' WHERE id=?", (id_,))
             conn.commit()
+
+            for linea in materiales.split("\n"):
+                linea = linea.strip()
+                if not linea:
+                    continue
+
+                material_nombre = linea
+                unidades = ""
+
+                if " - " in linea:
+                    material_nombre, unidades_texto = linea.rsplit(" - ", 1)
+                    unidades = unidades_texto.replace("unidades", "").strip()
+
+                guardar_albaran_finalizado(
+                    fecha=fecha,
+                    nombre=nombre,
+                    empresa=empresa,
+                    solicitado_por=solicitado_por,
+                    material=material_nombre,
+                    unidades=unidades,
+                )
+
             st.success("Albarán marcado como finalizado")
