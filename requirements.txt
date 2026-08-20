@@ -3,4 +3,5 @@ pandas
 requests
 pillow
 openpyxl
+xlrd
 zxing-cpp
