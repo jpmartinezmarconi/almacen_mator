@@ -1,4 +1,6 @@
+import io
 import re
+import unicodedata
 from datetime import date
 
 import numpy as np
@@ -101,14 +103,32 @@ if guardar_equipo:
 
 
 def normalizar_columna(valor):
-    valor = str(valor).strip().lower()
-    return re.sub(r"[^a-z0-9]", "", valor.replace("ñ", "n"))
+    valor = unicodedata.normalize("NFKD", str(valor).strip().lower())
+    valor = "".join(caracter for caracter in valor if not unicodedata.combining(caracter))
+    return re.sub(r"[^a-z0-9]", "", valor)
+
+
+def leer_csv_universal(archivo, header=0):
+    contenido = archivo.getvalue()
+    ultimo_error = None
+    for encoding in ("utf-8-sig", "cp1252", "latin1"):
+        try:
+            return pd.read_csv(
+                io.BytesIO(contenido),
+                sep=None,
+                engine="python",
+                encoding=encoding,
+                header=header,
+            )
+        except (UnicodeDecodeError, pd.errors.ParserError) as error:
+            ultimo_error = error
+    raise ValueError(f"No se pudo leer el CSV: {ultimo_error}")
 
 
 def preparar_importacion(archivo):
     nombre_archivo = archivo.name.lower()
     if nombre_archivo.endswith(".csv"):
-        datos = pd.read_csv(archivo)
+        datos = leer_csv_universal(archivo)
     elif nombre_archivo.endswith(".xls"):
         datos = pd.read_excel(archivo, engine="xlrd")
     else:
@@ -116,25 +136,39 @@ def preparar_importacion(archivo):
 
     columnas = {normalizar_columna(columna): columna for columna in datos.columns}
     alias = {
-        "nombre": ("nombre",),
-        "cantidad": ("cantidad",),
-        "numero_serie": ("numerodeserie", "numeroserie", "serie"),
-        "seccion": ("seccion",),
+        "nombre": ("nombre", "producto", "material", "equipo", "descripcion"),
+        "cantidad": ("cantidad", "unidades", "unidad", "cantidadtotal", "qty"),
+        "numero_serie": ("numerodeserie", "numeroserie", "serie", "serial", "serialnumber"),
+        "seccion": ("seccion", "area", "departamento", "ubicacion", "ubicación"),
     }
-    faltantes = [
-        destino
-        for destino, posibles in alias.items()
-        if not any(posible in columnas for posible in posibles)
-    ]
-    if faltantes:
-        raise ValueError("Faltan columnas: " + ", ".join(faltantes))
 
     resultado = pd.DataFrame()
+    columnas_encontradas = {}
     for destino, posibles in alias.items():
-        columna = next(columnas[posible] for posible in posibles if posible in columnas)
-        resultado[destino] = datos[columna]
+        columna = next((columnas[posible] for posible in posibles if posible in columnas), None)
+        if columna is not None:
+            columnas_encontradas[destino] = columna
 
-    resultado["cantidad"] = pd.to_numeric(resultado["cantidad"], errors="raise").astype(int)
+    if len(columnas_encontradas) == 0 and nombre_archivo.endswith(".csv"):
+        datos = leer_csv_universal(archivo, header=None)
+        datos = datos.iloc[:, :4].copy()
+        datos.columns = list(alias)
+        resultado = datos
+    elif len(columnas_encontradas) < len(alias):
+        if len(datos.columns) < 4:
+            faltantes = [destino for destino in alias if destino not in columnas_encontradas]
+            raise ValueError("El archivo necesita al menos cuatro columnas: " + ", ".join(faltantes))
+        datos = datos.iloc[:, :4].copy()
+        datos.columns = list(alias)
+        resultado = datos
+    else:
+        for destino, columna in columnas_encontradas.items():
+            resultado[destino] = datos[columna]
+
+    resultado["cantidad"] = pd.to_numeric(
+        resultado["cantidad"].astype(str).str.replace(",", ".", regex=False),
+        errors="raise",
+    ).astype(int)
     if (resultado["cantidad"] < 1).any():
         raise ValueError("La cantidad debe ser mayor que cero.")
     for columna in ("nombre", "numero_serie", "seccion"):
