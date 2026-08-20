@@ -10,7 +10,7 @@ import streamlit as st
 
 from utils.db import get_conn, init_db
 
-PASSWORD_EQUIPOS = "ju@n"
+PASSWORDS_EQUIPOS = {"ju@n", "t@ny"}
 EQUIPO_COLUMNS = ["nombre", "cantidad", "numero_serie", "seccion"]
 
 st.set_page_config(page_title="Equipos - Almacén Mator", layout="wide")
@@ -21,7 +21,7 @@ if not st.session_state.get("equipos_autorizado"):
     st.info("Introduce la contraseña para acceder a esta sección.")
     password = st.text_input("Contraseña", type="password")
     if password:
-        if password == PASSWORD_EQUIPOS:
+        if password in PASSWORDS_EQUIPOS:
             st.session_state.equipos_autorizado = True
             st.rerun()
         else:
