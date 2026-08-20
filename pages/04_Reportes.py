@@ -2,8 +2,10 @@ import os
 import streamlit as st
 import pandas as pd
 
+from utils.branding import mostrar_logo
 from utils.csv_storage import CSV_PATH
 
+mostrar_logo()
 st.title("Reportes - Albaranes Finalizados")
 
 if not os.path.isfile(CSV_PATH):

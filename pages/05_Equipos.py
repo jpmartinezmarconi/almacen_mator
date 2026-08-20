@@ -8,12 +8,14 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from utils.branding import mostrar_logo
 from utils.db import get_conn, init_db
 
 PASSWORDS_EQUIPOS = {"ju@n", "t@ny"}
 EQUIPO_COLUMNS = ["nombre", "cantidad", "numero_serie", "seccion"]
 
 st.set_page_config(page_title="Equipos - Almacén Mator", layout="wide")
+mostrar_logo()
 init_db()
 
 if not st.session_state.get("equipos_autorizado"):

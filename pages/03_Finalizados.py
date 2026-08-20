@@ -4,9 +4,11 @@ from io import BytesIO
 
 import pandas as pd
 import streamlit as st
+from utils.branding import mostrar_logo
 from utils.db import get_conn
 from utils.csv_storage import guardar_albaran_finalizado
 
+mostrar_logo()
 st.title("Albaranes Finalizados")
 
 conn = get_conn()
