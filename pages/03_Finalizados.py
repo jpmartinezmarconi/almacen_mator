@@ -15,9 +15,14 @@ cur = conn.cursor()
 empresa_filtro = st.text_input("Filtrar por empresa")
 nombre_filtro = st.text_input("Filtrar por nombre")
 estado_filtro = st.selectbox("Estado", ["todos", "entrada", "procesando", "finalizado"])
+buscar_historial = bool(empresa_filtro.strip() or nombre_filtro.strip())
 
 query = "SELECT * FROM albaranes WHERE 1=1"
 params = []
+
+if not buscar_historial:
+    query += " AND fecha = ?"
+    params.append(date.today().isoformat())
 
 if empresa_filtro:
     query += " AND empresa LIKE ?"
@@ -33,6 +38,11 @@ if estado_filtro != "todos":
 
 cur.execute(query, params)
 resultados = cur.fetchall()
+
+if buscar_historial:
+    st.caption("Buscando en todo el historial de albaranes.")
+else:
+    st.caption("Mostrando los albaranes de hoy. Usa empresa o nombre para buscar anteriores.")
 
 for albaran in resultados:
     id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha = albaran
