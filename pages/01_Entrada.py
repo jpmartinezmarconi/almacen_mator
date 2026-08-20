@@ -1,9 +1,11 @@
 import streamlit as st
+from utils.branding import mostrar_logo
 from utils.db import get_conn
 from utils.excel import generar_excel
 from utils.telegram import enviar_telegram
 import datetime
 
+mostrar_logo()
 st.title("Albarán de Entrada")
 
 nombre = st.text_input("Nombre")

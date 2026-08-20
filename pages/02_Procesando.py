@@ -1,6 +1,8 @@
 import streamlit as st
+from utils.branding import mostrar_logo
 from utils.db import get_conn
 
+mostrar_logo()
 st.title("Procesando Albaranes")
 
 password = st.text_input("Contraseña", type="password")
