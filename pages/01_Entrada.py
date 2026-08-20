@@ -21,26 +21,14 @@ materiales = []
 num_lineas = st.number_input("Número de líneas", min_value=1, value=1)
 
 for i in range(num_lineas):
-    busqueda_material = st.text_input(
-        f"Buscar material {i+1}",
-        key=f"busqueda_material_{i}",
-        placeholder="Escribe una o varias letras",
-    )
-    coincidencias = [
-        material
-        for material in MATERIALES
-        if busqueda_material.strip().lower() in material.lower()
-    ]
-    opciones = coincidencias + ["Otro material (escribir manualmente)"]
     material_seleccionado = st.selectbox(
-        f"Sugerencias para material {i+1}",
-        opciones,
+        f"Material {i+1}",
+        MATERIALES + ["Otro material (escribir manualmente)"],
         key=f"seleccion_material_{i}",
     )
     if material_seleccionado == "Otro material (escribir manualmente)":
         mat = st.text_input(
             f"Material manual {i+1}",
-            value=busqueda_material,
             key=f"material_manual_{i}",
         )
     else:
