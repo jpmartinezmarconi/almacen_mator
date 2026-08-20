@@ -109,8 +109,10 @@ def preparar_importacion(archivo):
     nombre_archivo = archivo.name.lower()
     if nombre_archivo.endswith(".csv"):
         datos = pd.read_csv(archivo)
+    elif nombre_archivo.endswith(".xls"):
+        datos = pd.read_excel(archivo, engine="xlrd")
     else:
-        datos = pd.read_excel(archivo)
+        datos = pd.read_excel(archivo, engine="openpyxl")
 
     columnas = {normalizar_columna(columna): columna for columna in datos.columns}
     alias = {
@@ -165,7 +167,7 @@ if archivo_importacion is not None:
             conn.commit()
             conn.close()
             st.success(f"Se han importado {len(equipos_importados)} equipos.")
-    except (ValueError, pd.errors.EmptyDataError, pd.errors.ParserError) as error:
+    except (ImportError, ValueError, pd.errors.EmptyDataError, pd.errors.ParserError) as error:
         st.error(f"No se pudo importar el archivo: {error}")
 
 
