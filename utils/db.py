@@ -23,5 +23,16 @@ def init_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS equipos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            cantidad INTEGER NOT NULL,
+            numero_serie TEXT NOT NULL,
+            seccion TEXT NOT NULL,
+            fecha_alta TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
     conn.close()
