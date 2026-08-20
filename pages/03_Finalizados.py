@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 from utils.db import get_conn
 from utils.csv_storage import guardar_albaran_finalizado
@@ -39,6 +41,19 @@ for albaran in resultados:
         st.write(f"Entrega: {envio_recogida}")
         st.write(f"Observaciones: {obs}")
         st.write(f"Mensaje final: {msg_final}")
+
+        ruta_excel = f"data/albaran_{id_}.xlsx"
+        if os.path.isfile(ruta_excel):
+            with open(ruta_excel, "rb") as archivo_excel:
+                st.download_button(
+                    label="Descargar Excel",
+                    data=archivo_excel.read(),
+                    file_name=f"albaran_{id_}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"descargar_excel_{id_}",
+                )
+        else:
+            st.caption("No hay un archivo Excel disponible para este albarán.")
 
         if st.button(f"Finalizar definitivamente #{id_}"):
             cur.execute("UPDATE albaranes SET estado='finalizado' WHERE id=?", (id_,))
