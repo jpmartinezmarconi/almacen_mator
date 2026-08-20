@@ -6,11 +6,6 @@ import datetime
 
 st.title("Albarán de Entrada")
 
-MATERIALES = [
-    "Cable", "Conector", "Disyuntor", "Enchufe", "Fusible",
-    "Interruptor", "Lámpara", "Magnetotérmico", "Regleta", "Tubo",
-]
-
 nombre = st.text_input("Nombre")
 empresa = st.text_input("Empresa")
 solicitado_por = st.text_input("Solicitado por")
@@ -18,21 +13,35 @@ solicitado_por = st.text_input("Solicitado por")
 st.subheader("Materiales pedidos")
 materiales = []
 
+conn_materiales = get_conn()
+filas_materiales = conn_materiales.execute("SELECT materiales FROM albaranes").fetchall()
+conn_materiales.close()
+
+catalogo_materiales = sorted({
+    linea.rsplit(" - ", 1)[0].strip()
+    for (materiales_guardados,) in filas_materiales
+    for linea in (materiales_guardados or "").splitlines()
+    if linea.strip()
+})
+
 num_lineas = st.number_input("Número de líneas", min_value=1, value=1)
 
 for i in range(num_lineas):
-    material_seleccionado = st.selectbox(
-        f"Material {i+1}",
-        MATERIALES + ["Otro material (escribir manualmente)"],
-        key=f"seleccion_material_{i}",
-    )
-    if material_seleccionado == "Otro material (escribir manualmente)":
+    usar_material_manual = st.checkbox("Escribir material nuevo", key=f"usar_material_manual_{i}")
+    if usar_material_manual:
         mat = st.text_input(
-            f"Material manual {i+1}",
+            f"Material {i+1}",
             key=f"material_manual_{i}",
         )
     else:
-        mat = material_seleccionado
+        material_seleccionado = st.selectbox(
+            f"Material {i+1}",
+            catalogo_materiales,
+            index=None,
+            placeholder="Escribe para buscar un material existente",
+            key=f"seleccion_material_{i}",
+        )
+        mat = material_seleccionado or ""
     uni = st.number_input(f"Unidades {i+1}", min_value=1, value=1)
     materiales.append(f"{mat} - {uni} unidades")
 
