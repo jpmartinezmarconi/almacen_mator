@@ -1,6 +1,7 @@
 import re
 from datetime import date
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -31,30 +32,57 @@ if st.button("Cerrar sesión de Equipos"):
     st.rerun()
 
 st.subheader("Añadir equipo")
-st.caption("Puedes escribir el número de serie o leerlo con la cámara del móvil.")
+st.caption("Puedes escribir el número de serie, usar la cámara o abrir un lector externo.")
+
+
+def decodificar_codigo(imagen):
+    import zxingcpp
+    from PIL import Image, ImageEnhance, ImageOps
+
+    imagen_pil = Image.open(imagen).convert("RGB")
+    if max(imagen_pil.size) < 1600:
+        escala = 1600 / max(imagen_pil.size)
+        imagen_pil = imagen_pil.resize(
+            (int(imagen_pil.width * escala), int(imagen_pil.height * escala))
+        )
+
+    imagenes = [imagen_pil, ImageOps.grayscale(imagen_pil)]
+    imagenes.append(ImageEnhance.Contrast(imagenes[-1]).enhance(2.0))
+    resultados = []
+    for imagen_preparada in imagenes:
+        matriz = np.array(imagen_preparada)
+        for giro in range(4):
+            matriz_girada = np.rot90(matriz, giro)
+            resultados.extend(zxingcpp.read_barcodes(matriz_girada))
+    return next((codigo.text for codigo in resultados if codigo.text.strip()), "")
 
 numero_serie_camara = ""
 captura = st.camera_input("Leer código de barras", key="camara_codigo_barras")
 if captura is not None:
     try:
-        import numpy as np
-        import zxingcpp
-        from PIL import Image
-
-        imagen = np.array(Image.open(captura).convert("RGB"))
-        codigos = zxingcpp.read_barcodes(imagen)
-        if codigos:
-            numero_serie_camara = codigos[0].text
+        numero_serie_camara = decodificar_codigo(captura)
+        if numero_serie_camara:
             st.success(f"Código leído: {numero_serie_camara}")
         else:
             st.warning("No se ha detectado ningún código de barras en la imagen.")
     except ImportError:
         st.error("La lectura de códigos no está disponible en este despliegue.")
 
+st.markdown(
+    "<a href='intent://scan/#Intent;scheme=zxing;end' target='_blank'>"
+    "Abrir lector de códigos externo (Android)</a>",
+    unsafe_allow_html=True,
+)
+numero_serie_externo = st.text_input(
+    "Código leído con otra aplicación (opcional)",
+    key="codigo_externo",
+)
+numero_serie_detectado = numero_serie_externo.strip() or numero_serie_camara
+
 with st.form("formulario_equipo", clear_on_submit=True):
     nombre = st.text_input("Nombre")
     cantidad = st.number_input("Cantidad", min_value=1, step=1, value=1)
-    numero_serie = st.text_input("Número de serie", value=numero_serie_camara)
+    numero_serie = st.text_input("Número de serie", value=numero_serie_detectado)
     seccion = st.text_input("Sección")
     guardar_equipo = st.form_submit_button("Guardar equipo")
 
