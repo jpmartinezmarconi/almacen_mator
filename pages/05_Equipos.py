@@ -1,3 +1,4 @@
+import io
 import re
 import unicodedata
 from datetime import date
@@ -107,6 +108,26 @@ def normalizar_columna(valor):
     return re.sub(r"[^a-z0-9]", "", valor)
 
 
+def limpiar_cantidad(valor):
+    if pd.isna(valor):
+        return 0
+
+    texto = str(valor).strip().lower()
+    if texto == "":
+        return 0
+
+    palabras = {
+        "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4,
+        "cinco": 5, "seis": 6, "siete": 7, "ocho": 8, "nueve": 9,
+        "diez": 10,
+    }
+    if texto in palabras:
+        return palabras[texto]
+
+    numeros = re.findall(r"\d+", texto)
+    return int(numeros[0]) if numeros else 0
+
+
 def leer_csv_universal(archivo, header=0):
     contenido = archivo.getvalue()
     ultimo_error = None
@@ -164,12 +185,7 @@ def preparar_importacion(archivo):
         for destino, columna in columnas_encontradas.items():
             resultado[destino] = datos[columna]
 
-    resultado["cantidad"] = pd.to_numeric(
-        resultado["cantidad"].astype(str).str.replace(",", ".", regex=False),
-        errors="raise",
-    ).astype(int)
-    if (resultado["cantidad"] < 1).any():
-        raise ValueError("La cantidad debe ser mayor que cero.")
+    resultado["cantidad"] = resultado["cantidad"].apply(limpiar_cantidad).astype("Int64")
     for columna in ("nombre", "numero_serie", "seccion"):
         resultado[columna] = resultado[columna].fillna("").astype(str).str.strip()
         if resultado[columna].eq("").any():
