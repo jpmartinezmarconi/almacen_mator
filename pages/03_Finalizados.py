@@ -1,3 +1,6 @@
+import os
+from datetime import datetime
+
 import streamlit as st
 from utils.db import get_conn
 from utils.csv_storage import guardar_albaran_finalizado
@@ -40,6 +43,19 @@ for albaran in resultados:
         st.write(f"Observaciones: {obs}")
         st.write(f"Mensaje final: {msg_final}")
 
+        ruta_excel = f"data/albaran_{id_}.xlsx"
+        if os.path.isfile(ruta_excel):
+            with open(ruta_excel, "rb") as archivo_excel:
+                st.download_button(
+                    label="Descargar Excel",
+                    data=archivo_excel.read(),
+                    file_name=f"albaran_{id_}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"descargar_excel_{id_}",
+                )
+        else:
+            st.caption("No hay un archivo Excel disponible para este albarán.")
+
         if st.button(f"Finalizar definitivamente #{id_}"):
             cur.execute("UPDATE albaranes SET estado='finalizado' WHERE id=?", (id_,))
             conn.commit()
@@ -66,41 +82,42 @@ for albaran in resultados:
                 )
 
             st.success("Albarán marcado como finalizado")
+
 # ---------------------------------------------------------
-# 📥 DESCARGA DE ARCHIVOS XLSX ORDENADOS POR FECHA (FECHA EN EL BOTÓN)
+# DESCARGA DE ARCHIVOS XLSX ORDENADOS POR FECHA
 # ---------------------------------------------------------
 
 st.header("Descargar albaranes finalizados")
 
-data_path = "/app/data"
+data_path = "/app/data" if os.path.isdir("/app/data") else "data"
 
 files = []
-for f in os.listdir(data_path):
-    if f.endswith(".xlsx"):
-        full_path = os.path.join(data_path, f)
+for file_name in os.listdir(data_path):
+    if file_name.endswith(".xlsx"):
+        full_path = os.path.join(data_path, file_name)
         mod_time = os.path.getmtime(full_path)
-        files.append((f, full_path, mod_time))
+        files.append((file_name, full_path, mod_time))
 
-# Ordenar por fecha (más reciente primero)
-files.sort(key=lambda x: x[2], reverse=True)
-
-from datetime import datetime
+files.sort(key=lambda item: item[2], reverse=True)
 
 if not files:
     st.write("No hay albaranes finalizados para descargar.")
 else:
     for file_name, file_path, mod_time in files:
-
-        # Convertir fecha a formato legible
         fecha_legible = datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M")
 
-        # Botón con fecha incluida
-        with open(file_path, "rb") as f:
+        with open(file_path, "rb") as archivo_excel:
             st.download_button(
                 label=f"Descargar {file_name} ({fecha_legible})",
-                data=f,
+                data=archivo_excel.read(),
                 file_name=file_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"descargar_archivo_{file_name}",
             )
 
         st.markdown("---")
+
+
+
+
+
