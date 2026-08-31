@@ -35,6 +35,63 @@ if st.button("Cerrar sesión de Equipos"):
     st.session_state.equipos_autorizado = False
     st.rerun()
 
+if "lecturas_prologic" not in st.session_state:
+    st.session_state.lecturas_prologic = []
+
+st.subheader("Lecturas Zebra para Prologic")
+st.caption("Configura una descripción y escanea códigos con la Zebra. Cada lectura se exporta como 1 unidad.")
+
+descripcion_lecturas = st.text_input(
+    "Descripción común de los artículos",
+    key="descripcion_lecturas_prologic",
+)
+seccion_lecturas = st.text_input(
+    "Sección o ubicación",
+    key="seccion_lecturas_prologic",
+)
+
+with st.form("formulario_lectura_zebra", clear_on_submit=True):
+    codigo_lectura = st.text_input("Código de barras", key="codigo_lectura_zebra")
+    anadir_lectura = st.form_submit_button("Añadir código")
+
+if anadir_lectura:
+    codigo_lectura = codigo_lectura.strip()
+    if not descripcion_lecturas.strip():
+        st.error("Escribe una descripción común antes de escanear.")
+    elif not seccion_lecturas.strip():
+        st.error("Escribe una sección o ubicación antes de escanear.")
+    elif not codigo_lectura:
+        st.error("No se ha recibido ningún código.")
+    elif any(lectura["Codigo"] == codigo_lectura for lectura in st.session_state.lecturas_prologic):
+        st.warning(f"El código {codigo_lectura} ya está en esta tanda y no se ha duplicado.")
+    else:
+        st.session_state.lecturas_prologic.append(
+            {
+                "Codigo": codigo_lectura,
+                "Descripcion": descripcion_lecturas.strip(),
+                "Unidades": 1,
+                "Seccion": seccion_lecturas.strip(),
+            }
+        )
+        st.success(f"Código añadido: {codigo_lectura}")
+
+if st.session_state.lecturas_prologic:
+    lecturas_prologic = pd.DataFrame(st.session_state.lecturas_prologic)
+    st.dataframe(lecturas_prologic, use_container_width=True, hide_index=True)
+    st.metric("Unidades de esta tanda", int(lecturas_prologic["Unidades"].sum()))
+
+    csv_prologic = lecturas_prologic.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        "Descargar CSV para Prologic",
+        data=csv_prologic,
+        file_name="lecturas_prologic.csv",
+        mime="text/csv",
+        key="descargar_csv_prologic",
+    )
+    if st.button("Vaciar tanda de lecturas", key="vaciar_lecturas_prologic"):
+        st.session_state.lecturas_prologic = []
+        st.rerun()
+
 st.subheader("Añadir equipo")
 st.caption("Puedes escribir el número de serie, usar la cámara o abrir un lector externo.")
 
