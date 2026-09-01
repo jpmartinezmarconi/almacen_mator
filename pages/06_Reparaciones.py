@@ -29,16 +29,22 @@ with st.form("nueva_reparacion"):
         type=["jpg", "jpeg", "png", "webp"],
         accept_multiple_files=True,
     )
-    enviar = st.form_submit_button("Guardar reparacion")
+    col_process_new, col_finish_new = st.columns(2)
+    guardar_proceso = col_process_new.form_submit_button("Reparacion en proceso")
+    guardar_finalizado = col_finish_new.form_submit_button("Guardar como finalizado")
 
-if enviar:
+if guardar_proceso or guardar_finalizado:
+    requiere_presupuesto = guardar_finalizado
     if not empresa.strip() or not reparacion.strip():
         st.error("Empresa y reparacion son obligatorios.")
-    elif presupuesto_archivo is None and presupuesto_monto <= 0:
+    elif requiere_presupuesto and presupuesto_archivo is None and presupuesto_monto <= 0:
         st.error("Introduce un monto o adjunta un presupuesto.")
-    elif presupuesto_password != "dotr@s":
+    elif requiere_presupuesto and presupuesto_password != "dotr@s":
         st.error("La contraseña del presupuesto es incorrecta.")
     else:
+        estado_inicial = "finalizado" if guardar_finalizado else "en proceso"
+        fecha_finalizacion = date.today().isoformat() if guardar_finalizado else None
+        presupuesto_estado = "aceptado" if requiere_presupuesto else "pendiente"
         conn = get_conn()
         cursor = conn.cursor()
         cursor.execute(
@@ -46,9 +52,10 @@ if enviar:
             (fecha_entrada, empresa, reparacion, piezas_pendientes,
              presupuesto_monto, presupuesto_archivo, estado, fotos,
              fecha_finalizacion, presupuesto_estado)
-            VALUES (?, ?, ?, ?, ?, ?, 'en reparacion', '', NULL, 'aceptado')""",
+            VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)""",
             (fecha_entrada.isoformat(), empresa.strip(), reparacion.strip(),
-             piezas_pendientes.strip(), presupuesto_monto or None, ""),
+            piezas_pendientes.strip(), presupuesto_monto or None, "", estado_inicial,
+            fecha_finalizacion, presupuesto_estado),
         )
         repair_id = cursor.lastrowid
         budget_path = save_upload(presupuesto_archivo, repair_id, "presupuesto")
@@ -59,7 +66,7 @@ if enviar:
         )
         conn.commit()
         conn.close()
-        st.success(f"Reparacion #{repair_id} guardada y presupuesto aceptado.")
+        st.success(f"Reparacion #{repair_id} guardada como {estado_inicial}.")
         st.rerun()
 
 conn = get_conn()
@@ -83,6 +90,23 @@ else:
             st.write(f"Reparacion: {trabajo}")
             st.write(f"Piezas pendientes: {piezas or 'Ninguna indicada'}")
             st.write(f"Presupuesto: {monto if monto is not None else 'Adjunto'} ({budget_status})")
+            final_monto = st.number_input(
+                "Monto para finalizar",
+                min_value=0.0,
+                value=float(monto or 0),
+                step=0.01,
+                key=f"final_amount_{repair_id}",
+            )
+            final_file = st.file_uploader(
+                "Presupuesto para finalizar",
+                type=["xlsx", "xls", "docx", "doc"],
+                key=f"final_budget_{repair_id}",
+            )
+            final_password = st.text_input(
+                "Contraseña para finalizar",
+                type="password",
+                key=f"final_password_{repair_id}",
+            )
             if budget_path:
                 full_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), budget_path)
                 if os.path.isfile(full_path):
@@ -104,12 +128,21 @@ else:
                     st.rerun()
             with col_finish:
                 if st.button(f"Finalizado #{repair_id}", key=f"finish_repair_{repair_id}"):
-                    conn.execute(
-                        "UPDATE reparaciones SET estado='finalizado', fecha_finalizacion=? WHERE id=?",
-                        (date.today().isoformat(), repair_id),
-                    )
-                    conn.commit()
-                    st.success("Reparacion finalizada.")
-                    st.rerun()
+                    if final_file is None and final_monto <= 0:
+                        st.error("Para finalizar debes introducir un monto o adjuntar un presupuesto.")
+                    elif final_password != "dotr@s":
+                        st.error("La contraseña del presupuesto es incorrecta.")
+                    else:
+                        uploaded_budget_path = save_upload(final_file, repair_id, "presupuesto")
+                        conn.execute(
+                            """UPDATE reparaciones SET estado='finalizado', fecha_finalizacion=?,
+                            presupuesto_monto=?, presupuesto_archivo=?, presupuesto_estado='aceptado'
+                            WHERE id=?""",
+                            (date.today().isoformat(), final_monto or None,
+                             uploaded_budget_path or budget_path, repair_id),
+                        )
+                        conn.commit()
+                        st.success("Reparacion finalizada.")
+                        st.rerun()
 
 conn.close()
