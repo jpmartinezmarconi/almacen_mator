@@ -1,12 +1,15 @@
+import os
 import sqlite3
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, "data", "albaranes.db")
+
+
 def get_conn():
-    return sqlite3.connect("data/albaranes.db", check_same_thread=False)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 
-def init_db():
-    conn = get_conn()
     cur = conn.cursor()
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS albaranes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,5 +37,33 @@ def init_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS reparaciones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha_entrada TEXT NOT NULL,
+            empresa TEXT NOT NULL,
+            reparacion TEXT NOT NULL,
+            piezas_pendientes TEXT,
+            presupuesto_monto REAL,
+            presupuesto_archivo TEXT,
+            estado TEXT NOT NULL DEFAULT 'en reparacion',
+            fotos TEXT,
+            fecha_finalizacion TEXT
+        )
+    """)
+
+    repair_columns = {
+        row[1] for row in cur.execute("PRAGMA table_info(reparaciones)").fetchall()
+    }
+    if "presupuesto_estado" not in repair_columns:
+        cur.execute(
+            "ALTER TABLE reparaciones ADD COLUMN presupuesto_estado TEXT DEFAULT 'pendiente'"
+        )
+
     conn.commit()
+    return conn
+
+
+def init_db():
+    conn = get_conn()
     conn.close()
