@@ -5,7 +5,7 @@ import streamlit as st
 
 from utils.branding import mostrar_logo
 from utils.db import get_conn
-from utils.reparaciones import repair_excel, repair_zip
+from utils.reparaciones import repair_excel, repair_zip, save_upload
 
 mostrar_logo()
 st.title("Averias en proceso")
@@ -30,7 +30,6 @@ if fecha_inicio and fecha_fin:
     params.extend([fecha_inicio.isoformat(), fecha_fin.isoformat()])
 query += " ORDER BY fecha_entrada DESC, id DESC"
 records = conn.execute(query, params).fetchall()
-conn.close()
 
 st.caption(f"Averias en proceso encontradas: {len(records)}")
 if not records:
@@ -44,6 +43,23 @@ for record in records:
         st.write(f"Reparacion: {trabajo}")
         st.write(f"Piezas pendientes: {piezas or 'Ninguna'}")
         st.write(f"Presupuesto: {monto if monto is not None else 'Adjunto'} ({budget_status})")
+        final_monto = st.number_input(
+            "Monto para finalizar",
+            min_value=0.0,
+            value=float(monto or 0),
+            step=0.01,
+            key=f"process_final_amount_{repair_id}",
+        )
+        final_file = st.file_uploader(
+            "Presupuesto para finalizar",
+            type=["xlsx", "xls", "docx", "doc"],
+            key=f"process_final_budget_{repair_id}",
+        )
+        final_password = st.text_input(
+            "Contraseña para finalizar",
+            type="password",
+            key=f"process_final_password_{repair_id}",
+        )
         if budget_path:
             full_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), budget_path)
             if os.path.isfile(full_path):
@@ -65,6 +81,23 @@ for record in records:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key=f"download_process_{repair_id}",
         )
+        if st.button(f"Finalizado #{repair_id}", key=f"finish_process_{repair_id}"):
+            if final_file is None and final_monto <= 0:
+                st.error("Para finalizar debes introducir un monto o adjuntar un presupuesto.")
+            elif final_password != "dotr@s":
+                st.error("La contraseña del presupuesto es incorrecta.")
+            else:
+                uploaded_budget_path = save_upload(final_file, repair_id, "presupuesto")
+                conn.execute(
+                    """UPDATE reparaciones SET estado='finalizado', fecha_finalizacion=?,
+                    presupuesto_monto=?, presupuesto_archivo=?, presupuesto_estado='aceptado'
+                    WHERE id=?""",
+                    (date.today().isoformat(), final_monto or None,
+                     uploaded_budget_path or budget_path, repair_id),
+                )
+                conn.commit()
+                st.success("Averia finalizada y enviada a Averias finalizadas.")
+                st.rerun()
 
 ids = [record[0] for record in records]
 selected_ids = st.multiselect(
@@ -92,3 +125,5 @@ st.download_button(
     mime="application/zip",
     key="download_all_process_repairs",
 )
+
+conn.close()
