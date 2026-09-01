@@ -8,7 +8,7 @@ from utils.db import get_conn
 from utils.reparaciones import repair_excel, repair_zip, save_upload
 
 mostrar_logo()
-st.title("Averias en proceso")
+st.title("Reparaciones en proceso")
 
 conn = get_conn()
 empresa_filtro = st.text_input("Filtrar por empresa")
