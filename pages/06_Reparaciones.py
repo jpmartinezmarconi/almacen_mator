@@ -92,13 +92,24 @@ else:
                 full_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), photo_path)
                 if os.path.isfile(full_path):
                     st.image(full_path, width=240)
-            if st.button(f"Marcar como finalizado #{repair_id}", key=f"finish_repair_{repair_id}"):
-                conn.execute(
-                    "UPDATE reparaciones SET estado='finalizado', fecha_finalizacion=? WHERE id=?",
-                    (date.today().isoformat(), repair_id),
-                )
-                conn.commit()
-                st.success("Reparacion finalizada.")
-                st.rerun()
+            col_process, col_finish = st.columns(2)
+            with col_process:
+                if st.button(f"En proceso #{repair_id}", key=f"process_repair_{repair_id}"):
+                    conn.execute(
+                        "UPDATE reparaciones SET estado='en proceso' WHERE id=?",
+                        (repair_id,),
+                    )
+                    conn.commit()
+                    st.success("Averia marcada como en proceso.")
+                    st.rerun()
+            with col_finish:
+                if st.button(f"Finalizado #{repair_id}", key=f"finish_repair_{repair_id}"):
+                    conn.execute(
+                        "UPDATE reparaciones SET estado='finalizado', fecha_finalizacion=? WHERE id=?",
+                        (date.today().isoformat(), repair_id),
+                    )
+                    conn.commit()
+                    st.success("Reparacion finalizada.")
+                    st.rerun()
 
 conn.close()
