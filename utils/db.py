@@ -22,9 +22,16 @@ def get_conn():
             estado TEXT,
             observaciones TEXT,
             mensaje_final TEXT,
-            fecha TEXT
+            fecha TEXT,
+            foto_preparacion TEXT
         )
     """)
+
+    albaran_columns = {
+        row[1] for row in cur.execute("PRAGMA table_info(albaranes)").fetchall()
+    }
+    if "foto_preparacion" not in albaran_columns:
+        cur.execute("ALTER TABLE albaranes ADD COLUMN foto_preparacion TEXT")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS equipos (

@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 from utils.branding import mostrar_logo
 from utils.db import get_conn
@@ -20,7 +22,7 @@ pendientes = cur.fetchall()
 st.subheader("Albaranes pendientes")
 
 for albaran in pendientes:
-    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha = albaran
+    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha, foto_preparacion = albaran
 
     with st.expander(f"Albarán #{id_} - {nombre}"):
         st.write(f"Empresa: {empresa}")
@@ -42,9 +44,18 @@ for albaran in pendientes:
         imagen = st.camera_input("O usa la cámara de la Zebra")
 
         if st.button(f"Marcar como procesado #{id_}"):
+            if imagen is None:
+                st.error("Debes sacar una foto de la preparación antes de marcar el albarán como procesado.")
+                continue
+
+            ruta_foto = os.path.join("data", f"albaran_{id_}_preparacion.jpg")
+            ruta_foto_completa = os.path.join(os.path.dirname(os.path.dirname(__file__)), ruta_foto)
+            with open(ruta_foto_completa, "wb") as archivo_foto:
+                archivo_foto.write(imagen.getvalue())
+
             cur.execute("""
-                UPDATE albaranes SET estado='procesando', observaciones=?, mensaje_final=?
+                UPDATE albaranes SET estado='procesando', observaciones=?, mensaje_final=?, foto_preparacion=?
                 WHERE id=?
-            """, (nuevas_obs, mensaje_final, id_))
+            """, (nuevas_obs, mensaje_final, ruta_foto, id_))
             conn.commit()
             st.success("Albarán actualizado")

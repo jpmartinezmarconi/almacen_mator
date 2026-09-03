@@ -40,7 +40,7 @@ resultados = cur.fetchall()
 st.caption("Mostrando solo los albaranes del día actual. Puedes filtrar por empresa, nombre o estado.")
 
 for albaran in resultados:
-    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha = albaran
+    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha, foto_preparacion = albaran
 
     with st.expander(f"#{id_} - {nombre} ({empresa}) [{estado}]"):
         st.write(f"Fecha: {fecha}")
@@ -49,6 +49,20 @@ for albaran in resultados:
         st.write(f"Entrega: {envio_recogida}")
         st.write(f"Observaciones: {obs}")
         st.write(f"Mensaje final: {msg_final}")
+
+        if foto_preparacion:
+            ruta_foto = os.path.join(os.path.dirname(os.path.dirname(__file__)), foto_preparacion)
+            if os.path.isfile(ruta_foto):
+                st.subheader("Foto de la preparación")
+                st.image(ruta_foto, caption="Preparación del material", width=500)
+                with open(ruta_foto, "rb") as archivo_foto:
+                    st.download_button(
+                        "Descargar foto de la preparación",
+                        data=archivo_foto.read(),
+                        file_name=os.path.basename(ruta_foto),
+                        mime="image/jpeg",
+                        key=f"descargar_foto_preparacion_{id_}",
+                    )
 
         ruta_excel = f"data/albaran_{id_}.xlsx"
         if os.path.isfile(ruta_excel):
