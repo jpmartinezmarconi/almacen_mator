@@ -1,8 +1,5 @@
 import os
-from datetime import datetime
-from io import BytesIO
 
-import pandas as pd
 import streamlit as st
 from utils.branding import mostrar_logo
 from utils.db import get_conn
@@ -104,70 +101,3 @@ for albaran in resultados:
 
             st.success("Albarán marcado como finalizado")
 
-st.header("Descargar albaranes por fecha")
-
-cur.execute(
-    "SELECT * FROM albaranes WHERE DATE(fecha) = DATE('now') AND estado = 'finalizado' ORDER BY fecha DESC"
-)
-albaranes_finalizados = cur.fetchall()
-
-
-def convertir_a_excel(albaranes):
-    columnas = [
-        "ID",
-        "Nombre",
-        "Empresa",
-        "Solicitado Por",
-        "Materiales",
-        "Comentario",
-        "Entrega",
-        "Estado",
-        "Observaciones",
-        "Mensaje final",
-        "Fecha",
-    ]
-    datos_excel = [dict(zip(columnas, albaran)) for albaran in albaranes]
-    archivo_excel = BytesIO()
-    pd.DataFrame(datos_excel).to_excel(archivo_excel, index=False)
-    return archivo_excel.getvalue()
-
-
-if not albaranes_finalizados:
-    st.info("No hay albaranes finalizados para descargar.")
-else:
-    fechas_albaranes = [
-        datetime.strptime(albaran[10], "%Y-%m-%d").date()
-        for albaran in albaranes_finalizados
-    ]
-    fecha_inicio, fecha_fin = st.date_input(
-        "Selecciona el rango de fechas",
-        value=(min(fechas_albaranes), max(fechas_albaranes)),
-        min_value=min(fechas_albaranes),
-        max_value=max(fechas_albaranes),
-        key="rango_descarga_albaranes",
-    )
-
-    albaranes_periodo = [
-        albaran
-        for albaran in albaranes_finalizados
-        if fecha_inicio <= datetime.strptime(albaran[10], "%Y-%m-%d").date() <= fecha_fin
-    ]
-
-    st.download_button(
-        label="Descargar todos los albaranes",
-        data=convertir_a_excel(albaranes_finalizados),
-        file_name="albaranes_finalizados.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="descargar_todos_albaranes",
-    )
-
-    st.download_button(
-        label=f"Descargar albaranes del {fecha_inicio} al {fecha_fin}",
-        data=convertir_a_excel(albaranes_periodo),
-        file_name=f"albaranes_{fecha_inicio}_{fecha_fin}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        disabled=not albaranes_periodo,
-        key="descargar_albaranes_periodo",
-    )
-
-    st.caption(f"Albaranes encontrados en el periodo: {len(albaranes_periodo)}")
