@@ -19,7 +19,7 @@ nombre_filtro = st.text_input("Filtrar por nombre")
 estado_filtro = st.selectbox("Estado", ["todos", "entrada", "procesando", "finalizado"])
 buscar_historial = bool(empresa_filtro.strip() or nombre_filtro.strip())
 
-query = "SELECT * FROM albaranes WHERE 1=1"
+query = "SELECT * FROM albaranes WHERE DATE(fecha) = DATE('now')"
 params = []
 
 if empresa_filtro:
@@ -37,7 +37,7 @@ if estado_filtro != "todos":
 cur.execute(query, params)
 resultados = cur.fetchall()
 
-st.caption("Mostrando todo el historial. Puedes filtrar por empresa, nombre o estado.")
+st.caption("Mostrando solo los albaranes del día actual. Puedes filtrar por empresa, nombre o estado.")
 
 for albaran in resultados:
     id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha = albaran
@@ -92,7 +92,9 @@ for albaran in resultados:
 
 st.header("Descargar albaranes por fecha")
 
-cur.execute("SELECT * FROM albaranes WHERE estado = 'finalizado' ORDER BY fecha DESC")
+cur.execute(
+    "SELECT * FROM albaranes WHERE DATE(fecha) = DATE('now') AND estado = 'finalizado' ORDER BY fecha DESC"
+)
 albaranes_finalizados = cur.fetchall()
 
 
