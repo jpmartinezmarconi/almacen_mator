@@ -1,7 +1,8 @@
-import os
 import csv
+import os
 
-CSV_PATH = "/app/data/albarans_finalizados.csv"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CSV_PATH = os.path.join(BASE_DIR, "data", "albarans_finalizados.csv")
 CSV_HEADERS = ["Fecha", "Nombre", "Empresa", "Solicitado Por", "Material", "Unidades"]
 
 

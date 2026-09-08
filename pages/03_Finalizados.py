@@ -78,26 +78,29 @@ for albaran in resultados:
             cur.execute("UPDATE albaranes SET estado='finalizado' WHERE id=?", (id_,))
             conn.commit()
 
-            for linea in materiales.split("\n"):
-                linea = linea.strip()
-                if not linea:
-                    continue
+            try:
+                for linea in (materiales or "").split("\n"):
+                    linea = linea.strip()
+                    if not linea:
+                        continue
 
-                material_nombre = linea
-                unidades = ""
+                    material_nombre = linea
+                    unidades = ""
 
-                if " - " in linea:
-                    material_nombre, unidades_texto = linea.rsplit(" - ", 1)
-                    unidades = unidades_texto.replace("unidades", "").strip()
+                    if " - " in linea:
+                        material_nombre, unidades_texto = linea.rsplit(" - ", 1)
+                        unidades = unidades_texto.replace("unidades", "").strip()
 
-                guardar_albaran_finalizado(
-                    fecha=fecha,
-                    nombre=nombre,
-                    empresa=empresa,
-                    solicitado_por=solicitado_por,
-                    material=material_nombre,
-                    unidades=unidades,
-                )
+                    guardar_albaran_finalizado(
+                        fecha=fecha,
+                        nombre=nombre,
+                        empresa=empresa,
+                        solicitado_por=solicitado_por,
+                        material=material_nombre,
+                        unidades=unidades,
+                    )
+            except OSError as error:
+                st.warning(f"Albarán finalizado, pero no se pudo guardar el CSV: {error}")
 
             st.success("Albarán marcado como finalizado")
 
