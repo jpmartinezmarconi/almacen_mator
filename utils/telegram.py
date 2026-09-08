@@ -9,14 +9,20 @@ logger = logging.getLogger(__name__)
 
 def enviar_telegram(mensaje, devolver_error=False):
     token = (os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-    chat_id = (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+    chat_id = (os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID") or "").strip()
 
     if not token or not chat_id:
+        faltan = []
+        if not token:
+            faltan.append("TELEGRAM_BOT_TOKEN o TELEGRAM_TOKEN")
+        if not chat_id:
+            faltan.append("TELEGRAM_CHAT_ID o CHAT_ID")
+        detalle = "Faltan variables de entorno: " + ", ".join(faltan)
         logger.error(
-            "TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no están configurados como variables de entorno"
+            detalle
         )
-        print("TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no están configurados como variables de entorno")
-        resultado = (False, "Faltan TELEGRAM_BOT_TOKEN/TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
+        print(detalle)
+        resultado = (False, detalle)
         return resultado if devolver_error else resultado[0]
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
