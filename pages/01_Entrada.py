@@ -79,7 +79,9 @@ if st.button("Enviar albarán"):
 
     ruta_excel = generar_excel(datos, id_albaran)
 
-    enviar_telegram("Tienes un nuevo albarán")
+    telegram_enviado = enviar_telegram("Tienes un nuevo albarán")
 
     st.success("Albarán enviado correctamente")
     st.info(f"Excel generado en: {ruta_excel}")
+    if not telegram_enviado:
+        st.warning("El albarán se guardó, pero no se pudo enviar el aviso de Telegram.")
