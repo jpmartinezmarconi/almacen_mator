@@ -7,7 +7,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-def enviar_telegram(mensaje):
+def enviar_telegram(mensaje, devolver_error=False):
     token = (os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
     chat_id = (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
 
@@ -16,7 +16,8 @@ def enviar_telegram(mensaje):
             "TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no están configurados como variables de entorno"
         )
         print("TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no están configurados como variables de entorno")
-        return False
+        resultado = (False, "Faltan TELEGRAM_BOT_TOKEN/TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
+        return resultado if devolver_error else resultado[0]
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = {"chat_id": chat_id, "text": mensaje}
@@ -33,14 +34,17 @@ def enviar_telegram(mensaje):
                 "Telegram rechazo el mensaje: %s",
                 resultado.get("description", "respuesta desconocida"),
             )
-            return False
+            resultado = (False, resultado.get("description", "Telegram rechazo el mensaje"))
+            return resultado if devolver_error else resultado[0]
 
         logger.info(
             "Respuesta de Telegram: status_code=%s, text=%s",
             response.status_code,
             response.text,
         )
-        return True
+        resultado = (True, "Mensaje enviado")
+        return resultado if devolver_error else resultado[0]
     except requests.RequestException as error:
         logger.error("Error al enviar el mensaje de Telegram: %s", error)
-        return False
+        resultado = (False, str(error))
+        return resultado if devolver_error else resultado[0]
