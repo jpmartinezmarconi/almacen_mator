@@ -13,7 +13,7 @@ cur = conn.cursor()
 estado_filtro = st.selectbox(
     "Filtrar por estado",
     ["todos", "entrada", "procesando", "finalizado"],
-    index=3,
+    index=0,
 )
 
 query = "SELECT id, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, observaciones, mensaje_final, fecha FROM albaranes"

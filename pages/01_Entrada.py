@@ -4,6 +4,7 @@ from utils.db import get_conn
 from utils.excel import generar_excel
 from utils.telegram import enviar_telegram
 import datetime
+from zoneinfo import ZoneInfo
 
 mostrar_logo()
 st.title("Albarán de Entrada")
@@ -65,7 +66,7 @@ if st.button("Enviar albarán"):
         "estado": "entrada",
         "observaciones": "",
         "mensaje_final": "",
-        "fecha": str(datetime.date.today())
+        "fecha": datetime.datetime.now(ZoneInfo("Europe/Madrid")).date().isoformat()
     }
 
     cur.execute("""

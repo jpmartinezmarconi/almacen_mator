@@ -1,4 +1,6 @@
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 from utils.branding import mostrar_logo
@@ -15,9 +17,10 @@ empresa_filtro = st.text_input("Filtrar por empresa")
 nombre_filtro = st.text_input("Filtrar por nombre")
 estado_filtro = st.selectbox("Estado", ["todos", "entrada", "procesando", "finalizado"])
 buscar_historial = bool(empresa_filtro.strip() or nombre_filtro.strip())
+fecha_hoy = datetime.now(ZoneInfo("Europe/Madrid")).date().isoformat()
 
-query = "SELECT * FROM albaranes WHERE DATE(fecha) = DATE('now')"
-params = []
+query = "SELECT * FROM albaranes WHERE substr(fecha, 1, 10) = ?"
+params = [fecha_hoy]
 
 if empresa_filtro:
     query += " AND empresa LIKE ?"
