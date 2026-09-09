@@ -5,3 +5,4 @@ pillow
 openpyxl
 xlrd
 zxing-cpp
+psycopg2-binary

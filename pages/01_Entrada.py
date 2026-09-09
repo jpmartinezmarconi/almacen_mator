@@ -73,10 +73,11 @@ if st.button("Enviar albarán"):
         INSERT INTO albaranes (nombre, empresa, solicitado_por, materiales, comentario,
         envio_recogida, estado, observaciones, mensaje_final, fecha)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
     """, tuple(datos.values()))
 
     conn.commit()
-    id_albaran = cur.lastrowid
+    id_albaran = cur.fetchone()[0]
 
     ruta_excel = generar_excel(datos, id_albaran)
 

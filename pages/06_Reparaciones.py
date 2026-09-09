@@ -52,12 +52,13 @@ if guardar_proceso or guardar_finalizado:
             (fecha_entrada, empresa, reparacion, piezas_pendientes,
              presupuesto_monto, presupuesto_archivo, estado, fotos,
              fecha_finalizacion, presupuesto_estado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)""",
+            VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+            RETURNING id""",
             (fecha_entrada.isoformat(), empresa.strip(), reparacion.strip(),
             piezas_pendientes.strip(), presupuesto_monto or None, "", estado_inicial,
             fecha_finalizacion, presupuesto_estado),
         )
-        repair_id = cursor.lastrowid
+        repair_id = cursor.fetchone()[0]
         budget_path = save_upload(presupuesto_archivo, repair_id, "presupuesto")
         photo_paths = [save_upload(photo, repair_id, "fotos") for photo in fotos]
         cursor.execute(
