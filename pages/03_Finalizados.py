@@ -96,6 +96,7 @@ for albaran in resultados:
                         unidades = unidades_texto.replace("unidades", "").strip()
 
                     guardar_albaran_finalizado(
+                        albaran_id=id_,
                         fecha=fecha,
                         nombre=nombre,
                         empresa=empresa,
