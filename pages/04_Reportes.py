@@ -15,13 +15,27 @@ estado_filtro = st.selectbox(
     ["todos", "entrada", "procesando", "finalizado"],
     index=0,
 )
+nombre_filtro = st.text_input("Buscar por nombre")
+empresa_filtro = st.text_input("Buscar por empresa")
 
 query = "SELECT id, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, observaciones, mensaje_final, fecha FROM albaranes"
 params = []
+condiciones = []
 
 if estado_filtro != "todos":
-    query += " WHERE estado = ?"
+    condiciones.append("estado = ?")
     params.append(estado_filtro)
+
+if nombre_filtro.strip():
+    condiciones.append("nombre LIKE ?")
+    params.append(f"%{nombre_filtro.strip()}%")
+
+if empresa_filtro.strip():
+    condiciones.append("empresa LIKE ?")
+    params.append(f"%{empresa_filtro.strip()}%")
+
+if condiciones:
+    query += " WHERE " + " AND ".join(condiciones)
 
 query += " ORDER BY fecha DESC, id DESC"
 
@@ -48,7 +62,7 @@ if not registros:
 
 df = pd.DataFrame(registros, columns=columnas)
 
-st.caption(f"Total de albaranes visibles: {len(df)}")
+st.caption(f"Total de albaranes visibles: {len(df)}. El historial se conserva aunque cambie su estado.")
 st.dataframe(df, use_container_width=True, hide_index=True)
 
 

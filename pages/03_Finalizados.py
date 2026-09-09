@@ -34,10 +34,11 @@ if estado_filtro != "todos":
     query += " AND estado = ?"
     params.append(estado_filtro)
 
+query += " ORDER BY fecha DESC, id DESC"
 cur.execute(query, params)
 resultados = cur.fetchall()
 
-st.caption("Mostrando solo los albaranes del día actual. Puedes filtrar por empresa, nombre o estado.")
+st.caption("Mostrando todos los albaranes de hoy, desde las 00:00 hasta las 23:59. Puedes filtrar por empresa, nombre o estado.")
 
 for albaran in resultados:
     id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha, foto_preparacion = albaran
