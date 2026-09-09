@@ -37,7 +37,7 @@ if empresa_filtro.strip():
 if condiciones:
     query += " WHERE " + " AND ".join(condiciones)
 
-query += " ORDER BY fecha DESC, id DESC"
+query += " ORDER BY id DESC, fecha DESC, nombre COLLATE NOCASE ASC"
 
 cur.execute(query, params)
 registros = cur.fetchall()
