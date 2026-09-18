@@ -38,7 +38,7 @@ resultados = cur.fetchall()
 st.caption("Mostrando todos los albaranes guardados. Puedes filtrar por empresa, nombre o estado.")
 
 for albaran in resultados:
-    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha, foto_preparacion, numero_serie = albaran
+    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, _msg_final, fecha, foto_preparacion, numero_serie = albaran
 
     with st.expander(f"#{id_} - {nombre} ({empresa}) [{estado}]"):
         st.write(f"Fecha: {fecha}")
@@ -47,7 +47,6 @@ for albaran in resultados:
         st.write(f"Comentario: {comentario}")
         st.write(f"Entrega: {envio_recogida}")
         st.write(f"Observaciones: {obs}")
-        st.write(f"Mensaje final: {msg_final}")
 
         if foto_preparacion:
             ruta_foto = os.path.join(os.path.dirname(os.path.dirname(__file__)), foto_preparacion)

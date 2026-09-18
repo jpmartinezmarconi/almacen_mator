@@ -16,7 +16,7 @@ estado_filtro = st.selectbox(
     index=3,
 )
 
-query = "SELECT id, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, observaciones, mensaje_final, fecha, numero_serie FROM albaranes"
+query = "SELECT id, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, observaciones, fecha, numero_serie FROM albaranes"
 params = []
 
 if estado_filtro != "todos":
@@ -38,7 +38,6 @@ columnas = [
     "Entrega",
     "Estado",
     "Observaciones",
-    "Mensaje final",
     "Fecha",
     "Número de serie / código Zebra",
 ]

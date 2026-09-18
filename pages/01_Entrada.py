@@ -64,14 +64,13 @@ if st.button("Enviar albarán"):
         "envio_recogida": envio_recogida,
         "estado": "entrada",
         "observaciones": "",
-        "mensaje_final": "",
         "fecha": str(datetime.date.today())
     }
 
     cur.execute("""
         INSERT INTO albaranes (nombre, empresa, solicitado_por, materiales, comentario,
-        envio_recogida, estado, observaciones, mensaje_final, fecha)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        envio_recogida, estado, observaciones, fecha)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, tuple(datos.values()))
 
     conn.commit()
@@ -82,4 +81,5 @@ if st.button("Enviar albarán"):
     enviar_telegram("Tienes un nuevo albarán")
 
     st.success("Albarán enviado correctamente")
+    st.info("Revisar en Finalizados cuando el albarán esté procesado.")
     st.info(f"Excel generado en: {ruta_excel}")

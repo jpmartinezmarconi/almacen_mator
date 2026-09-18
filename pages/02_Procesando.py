@@ -29,7 +29,7 @@ if albaranes_en_proceso >= MAX_ALBARANES_PROCESANDO:
     st.warning("Se ha alcanzado el máximo de 20 albaranes en procesando. Finaliza alguno antes de añadir otro.")
 
 for albaran in pendientes:
-    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha, foto_preparacion, numero_serie = albaran
+    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, _msg_final, fecha, foto_preparacion, numero_serie = albaran
 
     with st.expander(f"Albarán #{id_} - {nombre}"):
         st.write(f"Empresa: {empresa}")
