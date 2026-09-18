@@ -1,8 +1,6 @@
 import os
 from datetime import datetime
-from io import BytesIO
 
-import pandas as pd
 import streamlit as st
 from utils.branding import mostrar_logo
 from utils.db import get_conn
@@ -37,18 +35,33 @@ if estado_filtro != "todos":
 cur.execute(query, params)
 resultados = cur.fetchall()
 
-st.caption("Mostrando todo el historial. Puedes filtrar por empresa, nombre o estado.")
+st.caption("Mostrando todos los albaranes guardados. Puedes filtrar por empresa, nombre o estado.")
 
 for albaran in resultados:
-    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha = albaran
+    id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha, foto_preparacion, numero_serie = albaran
 
     with st.expander(f"#{id_} - {nombre} ({empresa}) [{estado}]"):
         st.write(f"Fecha: {fecha}")
+        st.write(f"Número de serie / código Zebra: {numero_serie or 'No leído'}")
         st.write(f"Materiales:\n{materiales}")
         st.write(f"Comentario: {comentario}")
         st.write(f"Entrega: {envio_recogida}")
         st.write(f"Observaciones: {obs}")
         st.write(f"Mensaje final: {msg_final}")
+
+        if foto_preparacion:
+            ruta_foto = os.path.join(os.path.dirname(os.path.dirname(__file__)), foto_preparacion)
+            if os.path.isfile(ruta_foto):
+                st.subheader("Foto de la preparación")
+                st.image(ruta_foto, caption="Preparación del material", width=500)
+                with open(ruta_foto, "rb") as archivo_foto:
+                    st.download_button(
+                        "Descargar foto de la preparación",
+                        data=archivo_foto.read(),
+                        file_name=os.path.basename(ruta_foto),
+                        mime="image/jpeg",
+                        key=f"descargar_foto_preparacion_{id_}",
+                    )
 
         ruta_excel = f"data/albaran_{id_}.xlsx"
         if os.path.isfile(ruta_excel):
@@ -90,82 +103,23 @@ for albaran in resultados:
 
             st.success("Albarán marcado como finalizado")
 
-st.header("Descargar albaranes por fecha")
-
-cur.execute("SELECT * FROM albaranes WHERE estado = 'finalizado' ORDER BY fecha DESC")
-albaranes_finalizados = cur.fetchall()
-
-def convertir_a_excel(albaranes):
-    columnas = [
-        "ID",
-        "Nombre",
-        "Empresa",
-        "Solicitado Por",
-        "Materiales",
-        "Comentario",
-        "Entrega",
-        "Estado",
-        "Observaciones",
-        "Mensaje final",
-        "Fecha",
-    ]
-    datos_excel = [dict(zip(columnas, albaran)) for albaran in albaranes]
-    archivo_excel = BytesIO()
-    pd.DataFrame(datos_excel).to_excel(archivo_excel, index=False)
-    return archivo_excel.getvalue()
-
-
-if not albaranes_finalizados:
-    st.info("No hay albaranes finalizados para descargar.")
-else:
-    fechas_albaranes = [
-        datetime.strptime(albaran[10], "%Y-%m-%d").date()
-        for albaran in albaranes_finalizados
-    ]
-    fecha_inicio, fecha_fin = st.date_input(
-        "Selecciona el rango de fechas",
-        value=(min(fechas_albaranes), max(fechas_albaranes)),
-        min_value=min(fechas_albaranes),
-        max_value=max(fechas_albaranes),
-        key="rango_descarga_albaranes",
-    )
-
-    albaranes_periodo = [
-        albaran
-        for albaran in albaranes_finalizados
-        if fecha_inicio <= datetime.strptime(albaran[10], "%Y-%m-%d").date() <= fecha_fin
-    ]
-
-    st.download_button(
-        label="Descargar todos los albaranes",
-        data=convertir_a_excel(albaranes_finalizados),
-        file_name="albaranes_finalizados.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="descargar_todos_albaranes",
-    )
-
-    st.download_button(
-        label=f"Descargar albaranes del {fecha_inicio} al {fecha_fin}",
-        data=convertir_a_excel(albaranes_periodo),
-        file_name=f"albaranes_{fecha_inicio}_{fecha_fin}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        disabled=not albaranes_periodo,
-        key="descargar_albaranes_periodo",
-    )
-
-    st.caption(f"Albaranes encontrados en el periodo: {len(albaranes_periodo)}")
-
 # ---------------------------------------------------------
 # DESCARGA DE ARCHIVOS XLSX ORDENADOS POR FECHA
 # ---------------------------------------------------------
 
 st.header("Descargar albaranes finalizados")
 
+cur.execute(
+    "SELECT * FROM albaranes WHERE estado = 'finalizado' ORDER BY fecha DESC"
+)
+albaranes_finalizados = cur.fetchall()
+
 data_path = "/app/data" if os.path.isdir("/app/data") else "data"
+albaranes_hoy = {f"albaran_{albaran[0]}.xlsx" for albaran in albaranes_finalizados}
 
 files = []
 for file_name in os.listdir(data_path):
-    if file_name.endswith(".xlsx"):
+    if file_name in albaranes_hoy:
         full_path = os.path.join(data_path, file_name)
         mod_time = os.path.getmtime(full_path)
         files.append((file_name, full_path, mod_time))
