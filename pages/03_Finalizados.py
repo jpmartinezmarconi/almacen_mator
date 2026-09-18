@@ -52,7 +52,7 @@ for albaran in resultados:
             ruta_foto = os.path.join(os.path.dirname(os.path.dirname(__file__)), foto_preparacion)
             if os.path.isfile(ruta_foto):
                 st.subheader("Foto de la preparación")
-                st.image(ruta_foto, caption="Preparación del material", width=500)
+                st.image(ruta_foto, caption="Preparación del material", width=400)
                 with open(ruta_foto, "rb") as archivo_foto:
                     st.download_button(
                         "Descargar foto de la preparación",

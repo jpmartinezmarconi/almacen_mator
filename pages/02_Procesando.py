@@ -1,6 +1,8 @@
 import os
+from io import BytesIO
 
 import streamlit as st
+from PIL import Image, ImageOps
 from utils.branding import mostrar_logo
 from utils.db import get_conn
 
@@ -57,8 +59,11 @@ for albaran in pendientes:
 
             ruta_foto = os.path.join("data", f"albaran_{id_}_preparacion.jpg")
             ruta_foto_completa = os.path.join(os.path.dirname(os.path.dirname(__file__)), ruta_foto)
+            imagen_preparada = ImageOps.exif_transpose(Image.open(BytesIO(imagen.getvalue())))
+            if imagen_preparada.mode != "RGB":
+                imagen_preparada = imagen_preparada.convert("RGB")
             with open(ruta_foto_completa, "wb") as archivo_foto:
-                archivo_foto.write(imagen.getvalue())
+                imagen_preparada.save(archivo_foto, format="JPEG", quality=95, subsampling=0, optimize=True)
 
             cur.execute("""
                 UPDATE albaranes SET estado='procesando', observaciones=?, foto_preparacion=?, numero_serie=?
