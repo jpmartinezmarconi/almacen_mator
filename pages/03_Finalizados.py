@@ -76,7 +76,17 @@ for albaran in resultados:
             st.caption("No hay un archivo Excel disponible para este albarán.")
 
         if st.button(f"Finalizar definitivamente #{id_}"):
-            cur.execute("UPDATE albaranes SET estado='finalizado' WHERE id=?", (id_,))
+            if estado != "procesando":
+                st.error("Este albarán debe pasar primero por Procesando.")
+                continue
+
+            cur.execute(
+                "UPDATE albaranes SET estado='finalizado' WHERE id=? AND estado='procesando'",
+                (id_,),
+            )
+            if cur.rowcount != 1:
+                st.error("El albarán ya no está disponible para finalizarse.")
+                continue
             conn.commit()
 
             for linea in materiales.split("\n"):
