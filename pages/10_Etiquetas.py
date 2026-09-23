@@ -246,7 +246,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
                 }});
                 const labelHtml = printLabel.outerHTML;
                 popup.document.write(`<html><head><title></title><style>
-                    @page {{ size: 107mm 42.2mm landscape; margin: 0; }}
+                    @page {{ size: 107mm 42.2mm; margin: 0; }}
                     html,body {{ margin: 0; padding: 0; width: 107mm; height: 42.2mm; }}
                     html, body {{ width: 107mm; height: 42.2mm; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
                     body {{ margin: 0; padding: 0; overflow: hidden; }}
