@@ -167,7 +167,7 @@ def vista_lab_datamax(textos, ancho, alto):
 
 def visor_interactivo_lab(elementos, ancho, alto):
     etiqueta = vista_etiqueta(elementos, ancho, alto)
-    escala = min(460 / ancho, 220 / alto)
+    escala = min(400 / ancho, 190 / alto)
     ancho_visible = ancho * escala
     alto_visible = alto * escala
     return f"""
@@ -175,6 +175,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
             body {{ margin: 0; font-family: Arial, sans-serif; }}
             .stage {{ min-height: 300px; padding: 14px; background: #edf0f2; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }}
             .label {{ user-select: none; }}
+            .label-text {{ position: absolute; white-space: nowrap; color: #111; }}
             .label-text, .barcode, .logo-slot {{ cursor: move; }}
             .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
             .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
@@ -226,7 +227,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     body {{ position: relative; }}
                     .label {{ position: absolute; left: 50%; top: 50%; width: {ancho_visible}px; height: {alto_visible}px; transform: translate(-50%, -50%) scale(${(107 / 25.4 * 96) / ancho_visible}); transform-origin: center center; }}
                     .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
-                    .label-text {{ font-size: 16px; font-weight: 600; }}
+                    .label-text {{ font-size: 5.5mm !important; font-weight: 600; }}
                       .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
                       .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
                     .barcode {{ display: flex; flex-direction: column; align-items: center; outline: none !important; }}
@@ -254,9 +255,9 @@ def zpl_de_elementos(elementos, ancho, alto, oscuridad, velocidad):
 
 
 def vista_etiqueta(elementos, ancho, alto):
-    escala = min(520 / ancho, 260 / alto)
+    escala = min(400 / ancho, 190 / alto)
     contenido = []
-    fuente_px = 5.5 / 25.4 * 300 * escala
+    fuente_px = 5.5 / 25.4 * 96 * escala
     logo_x = 35 * escala
     logo_y = 15 * escala
     logo_ancho = 280 * escala
