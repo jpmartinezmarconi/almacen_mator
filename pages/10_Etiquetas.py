@@ -180,7 +180,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
             .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
             .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
             .barcode {{ cursor: move; outline: 2px solid #1976d2; outline-offset: 3px; }}
-            .barcode::after {{ content: ''; position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #1976d2; border: 2px solid white; border-radius: 50%; cursor: nwse-resize; }}
+            .resize-handle {{ position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #1976d2; border: 2px solid white; border-radius: 50%; cursor: nwse-resize; }}
             .barcode img {{ display: block; width: 230px; height: 82px; }}
             .tools {{ display: flex; gap: 8px; align-items: center; margin-top: 8px; }}
             button {{ border: 0; border-radius: 4px; padding: 8px 12px; color: white; background: #d32f2f; cursor: pointer; }}
@@ -198,7 +198,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     event.preventDefault();
                     active = item;
                     const rect = item.getBoundingClientRect();
-                    action = item === barcode && event.clientX > rect.right - 18 && event.clientY > rect.bottom - 18 ? 'resize' : 'move';
+                    action = item === barcode && event.target.classList.contains('resize-handle') ? 'resize' : 'move';
                     startX = event.clientX; startY = event.clientY;
                     startLeft = item.offsetLeft; startTop = item.offsetTop; startWidth = item.offsetWidth;
                     item.setPointerCapture(event.pointerId);
@@ -224,18 +224,18 @@ def visor_interactivo_lab(elementos, ancho, alto):
                 popup.document.write(`<html><head><title></title><style>
                     @page {{ size: 107mm 42.2mm; margin: 0; }}
                     html,body {{ margin: 0; padding: 0; width: 107mm; height: 42.2mm; }}
-                    body {{ position: relative; }}
                     html, body {{ width: 107mm; height: 42.2mm; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
-                    body {{ position: relative; margin: 0; padding: 0; overflow: hidden; }}
-                    .label {{ position: absolute; left: 50%; top: 50%; width: {ancho_visible}px; height: {alto_visible}px; overflow: hidden; transform: translate(-50%, -50%) scale(${(107 / 25.4 * 96) / ancho_visible}); transform-origin: center center; }}
+                    body {{ margin: 0; padding: 0; overflow: hidden; }}
+                    .print-sheet {{ width: 107mm; height: 42.2mm; margin: 0 auto; display: flex; align-items: center; justify-content: center; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
+                    .label {{ position: relative; flex: 0 0 auto; width: {ancho_visible}px; height: {alto_visible}px; overflow: hidden; transform: scale(${(107 / 25.4 * 96) / ancho_visible}); transform-origin: center center; }}
                     .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
                     .label-text {{ font-size: 5.5mm !important; font-weight: 600; }}
                       .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
                       .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
                     .barcode {{ display: flex; flex-direction: column; align-items: center; outline: none !important; }}
-                    .barcode::after {{ display: none; }}
+                    .resize-handle {{ display: none; }}
                     .barcode img {{ display: block; }}
-                </style></head><body>${{labelHtml}}</body></html>`);
+                </style></head><body><div class="print-sheet">${{labelHtml}}</div></body></html>`);
                 popup.document.close(); popup.title = ''; popup.focus(); popup.print();
             }});
         </script>
@@ -290,7 +290,8 @@ def vista_etiqueta(elementos, ancho, alto):
                 svg_data = base64.b64encode(svg).decode("ascii")
                 contenido.append(
                     f'<div class="barcode" style="left:{x}px;top:{y}px">'
-                    f'<img src="data:image/svg+xml;base64,{svg_data}" alt="Code 128 {valor}"></div>'
+                    f'<img src="data:image/svg+xml;base64,{svg_data}" alt="Code 128 {valor}">'
+                    f'<span class="resize-handle" aria-label="Cambiar tamaño"></span></div>'
                 )
             except (ImportError, ValueError):
                 contenido.append(f'<div class="label-text" style="left:{x}px;top:{y}px">Código inválido: {valor}</div>')
