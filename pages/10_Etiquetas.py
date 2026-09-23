@@ -221,7 +221,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
             document.getElementById('print').addEventListener('click', () => {{
                 const popup = window.open('', '_blank', 'width=900,height=700');
                 const labelHtml = label.outerHTML;
-                popup.document.write(`<html><head><title>Etiqueta Datamax</title><style>
+                popup.document.write(`<html><head><title></title><style>
                     @page {{ size: 107mm 42.2mm; margin: 0; }}
                     html,body {{ margin: 0; padding: 0; width: 107mm; height: 42.2mm; }}
                     body {{ position: relative; }}
@@ -236,7 +236,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     .barcode::after {{ display: none; }}
                     .barcode img {{ display: block; }}
                 </style></head><body>${{labelHtml}}</body></html>`);
-                popup.document.close(); popup.focus(); popup.print();
+                popup.document.close(); popup.title = ''; popup.focus(); popup.print();
             }});
         </script>
         """
@@ -471,8 +471,8 @@ components.html(
 <script>
 function imprimirEtiqueta() {{
   const ventana = window.open('', '_blank', 'width=800,height=600');
-    ventana.document.write('<html><head><title>Etiqueta</title><style>@page{{size:auto;margin:8mm}}body{{margin:0}}.label-wrap{{display:flex;align-items:center;justify-content:center}}.label{{position:relative;background:white;border:1px solid #222;overflow:hidden;font-family:Arial,sans-serif}}.label-text,.barcode{{position:absolute;white-space:nowrap;color:#111}}.label-text{{font-size:16px;font-weight:600}}.barcode{{display:flex;flex-direction:column;align-items:center;font-family:monospace;font-size:11px}}.bars{{font-size:28px;letter-spacing:2px;line-height:25px}}</style></head><body>' + {json.dumps(vista_impresion)} + '</body></html>');
-  ventana.document.close(); ventana.focus(); ventana.print();
+        ventana.document.write('<html><head><title></title><style>@page{{size:auto;margin:8mm}}body{{margin:0}}.label-wrap{{display:flex;align-items:center;justify-content:center}}.label{{position:relative;background:white;border:1px solid #222;overflow:hidden;font-family:Arial,sans-serif}}.label-text,.barcode{{position:absolute;white-space:nowrap;color:#111}}.label-text{{font-size:16px;font-weight:600}}.barcode{{display:flex;flex-direction:column;align-items:center;font-family:monospace;font-size:11px}}.bars{{font-size:28px;letter-spacing:2px;line-height:25px}}</style></head><body>' + {json.dumps(vista_impresion)} + '</body></html>');
+    ventana.document.close(); ventana.title = ''; ventana.focus(); ventana.print();
 }}
 </script>''',
     height=55,
