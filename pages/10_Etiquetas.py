@@ -140,7 +140,7 @@ def editar_lab(datos, textos, cambios):
             pass
 
 
-def elementos_visuales_lab(textos):
+def elementos_visuales_lab(textos, barcode_x=353, barcode_y=300):
     ignorar = re.compile(
         r"^(Arial|Verdana|Tahoma|Text\d*|Text\d+ Copy.*|Line\d*.*|Image\d*|"
         r"Min=.*|Max=.*|All Image Files.*|Windows Bitmap.*|C:\\.*|2;0,.*)$",
@@ -154,7 +154,7 @@ def elementos_visuales_lab(textos):
         y = 30 + fila * 45
         matricula = re.match(r"^MATR[IÍ]CULA\s*:\s*(.+)$", valor, re.IGNORECASE)
         if matricula:
-            elementos.append({"tipo": "BARCODE", "x": 353, "y": 300, "valor": matricula.group(1).strip()})
+            elementos.append({"tipo": "BARCODE", "x": barcode_x, "y": barcode_y, "valor": matricula.group(1).strip()})
         else:
             elementos.append({"tipo": "TEXT", "x": x, "y": y, "valor": valor})
     return elementos
@@ -391,8 +391,12 @@ if st.session_state.lab_datamax is not None:
             cambios.append(st.text_input("Año", value=texto["valor"], key=f"lab_ano_{indice}"))
         else:
             cambios.append(st.text_input(f"Texto {indice + 1}", value=texto["valor"], key=f"lab_texto_{indice}"))
+    st.subheader("Posición del código de barras")
+    posicion_col_x, posicion_col_y = st.columns(2)
+    barcode_x = posicion_col_x.number_input("X", min_value=0, max_value=1264, value=353, step=1, key="posicion_barcode_x")
+    barcode_y = posicion_col_y.number_input("Y", min_value=0, max_value=498, value=300, step=1, key="posicion_barcode_y")
     textos_preview = [dict(texto, valor=cambio) for texto, cambio in zip(analisis["textos"], cambios)]
-    elementos_preview = elementos_visuales_lab(textos_preview)
+    elementos_preview = elementos_visuales_lab(textos_preview, int(barcode_x), int(barcode_y))
     st.subheader("Vista previa de la etiqueta")
     lab_ancho = round(107 / 25.4 * 300)
     lab_alto = round(42.2 / 25.4 * 300)
