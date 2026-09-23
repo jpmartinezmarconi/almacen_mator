@@ -121,8 +121,12 @@ with st.expander("Cargar plantilla", expanded=True):
 col_config, col_preview = st.columns([1, 1])
 with col_config:
     st.subheader("Diseño editable")
-    ancho = st.number_input("Ancho (puntos ZPL)", min_value=100, max_value=2400, value=600, step=10)
-    alto = st.number_input("Alto (puntos ZPL)", min_value=100, max_value=1600, value=400, step=10)
+    dpi = st.selectbox("Resolución de la impresora", [203, 300, 600], index=0, format_func=lambda valor: f"{valor} dpi")
+    ancho_mm = st.number_input("Ancho de etiqueta (mm)", min_value=10.0, max_value=300.0, value=107.0, step=0.1, format="%.1f")
+    alto_mm = st.number_input("Alto de etiqueta (mm)", min_value=10.0, max_value=200.0, value=42.2, step=0.1, format="%.1f")
+    ancho = round(ancho_mm / 25.4 * dpi)
+    alto = round(alto_mm / 25.4 * dpi)
+    st.caption(f"Tamaño ZPL calculado: {ancho} × {alto} puntos")
     nuevos = []
     for indice, elemento in enumerate(st.session_state.elementos_etiqueta):
         with st.expander(f"{elemento['tipo']} {indice + 1}", expanded=True):
