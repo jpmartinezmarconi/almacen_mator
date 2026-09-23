@@ -144,7 +144,13 @@ def elementos_visuales_lab(textos):
     elementos = []
     for indice, valor in enumerate(visibles):
         columna, fila = divmod(indice, 10)
-        elementos.append({"tipo": "TEXT", "x": 35 + columna * 620, "y": 30 + fila * 45, "valor": valor})
+        x = 35 + columna * 620
+        y = 30 + fila * 45
+        matricula = re.match(r"^MATR[IÍ]CULA\s*:\s*(.+)$", valor, re.IGNORECASE)
+        if matricula:
+            elementos.append({"tipo": "BARCODE", "x": x, "y": y, "valor": matricula.group(1).strip()})
+        else:
+            elementos.append({"tipo": "TEXT", "x": x, "y": y, "valor": valor})
     return elementos
 
 
