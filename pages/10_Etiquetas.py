@@ -8,7 +8,7 @@ import base64
 import streamlit as st
 import streamlit.components.v1 as components
 
-from utils.branding import mostrar_logo
+from utils.branding import LOGO_DATA, mostrar_logo
 
 st.set_page_config(page_title="Etiquetas - Almacén Mator", layout="wide")
 mostrar_logo()
@@ -175,6 +175,8 @@ def visor_interactivo_lab(elementos, ancho, alto):
             body {{ margin: 0; font-family: Arial, sans-serif; }}
             .stage {{ min-height: 300px; padding: 14px; background: #edf0f2; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }}
             .label {{ user-select: none; }}
+            .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
+            .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
             .barcode {{ cursor: move; outline: 2px solid #1976d2; outline-offset: 3px; }}
             .barcode::after {{ content: ''; position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #1976d2; border: 2px solid white; border-radius: 50%; cursor: nwse-resize; }}
             .barcode img {{ display: block; width: 230px; height: 82px; }}
@@ -222,6 +224,8 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     .label {{ position: absolute; left: 50%; top: 50%; width: {ancho_visible}px; height: {alto_visible}px; transform: translate(-50%, -50%) scale(${(107 / 25.4 * 96) / ancho_visible}); transform-origin: center center; }}
                     .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
                     .label-text {{ font-size: 16px; font-weight: 600; }}
+                      .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
+                      .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
                     .barcode {{ display: flex; flex-direction: column; align-items: center; outline: none !important; }}
                     .barcode::after {{ display: none; }}
                     .barcode img {{ display: block; }}
@@ -249,6 +253,15 @@ def zpl_de_elementos(elementos, ancho, alto, oscuridad, velocidad):
 def vista_etiqueta(elementos, ancho, alto):
     escala = min(520 / ancho, 260 / alto)
     contenido = []
+    fuente_px = 5.5 / 25.4 * 300 * escala
+    logo_x = 35 * escala
+    logo_y = 360 * escala
+    logo_ancho = 280 * escala
+    logo_alto = 85 * escala
+    contenido.append(
+        f'<div class="logo-slot" style="left:{logo_x}px;top:{logo_y}px;width:{logo_ancho}px;height:{logo_alto}px">'
+        f'<img src="data:image/png;base64,{LOGO_DATA}" alt="Logo Mator"></div>'
+    )
     for elemento in elementos:
         x = int(elemento["x"]) * escala
         y = int(elemento["y"]) * escala
@@ -276,7 +289,7 @@ def vista_etiqueta(elementos, ancho, alto):
             except (ImportError, ValueError):
                 contenido.append(f'<div class="label-text" style="left:{x}px;top:{y}px">Código inválido: {valor}</div>')
         else:
-            contenido.append(f'<div class="label-text" style="left:{x}px;top:{y}px">{valor}</div>')
+            contenido.append(f'<div class="label-text" style="left:{x}px;top:{y}px;font-size:{fuente_px:.2f}px">{valor}</div>')
     return f'<div class="label" style="width:{ancho * escala}px;height:{alto * escala}px">{"".join(contenido)}</div>'
 
 
