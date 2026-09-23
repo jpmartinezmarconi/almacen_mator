@@ -148,7 +148,7 @@ def elementos_visuales_lab(textos):
         y = 30 + fila * 45
         matricula = re.match(r"^MATR[IÍ]CULA\s*:\s*(.+)$", valor, re.IGNORECASE)
         if matricula:
-            elementos.append({"tipo": "BARCODE", "x": x, "y": y, "valor": matricula.group(1).strip()})
+            elementos.append({"tipo": "BARCODE", "x": 700, "y": 330, "valor": matricula.group(1).strip()})
         else:
             elementos.append({"tipo": "TEXT", "x": x, "y": y, "valor": valor})
     return elementos
@@ -219,8 +219,6 @@ if "plantilla_nativa" not in st.session_state:
     st.session_state.plantilla_nativa = None
 if "lab_datamax" not in st.session_state:
     st.session_state.lab_datamax = None
-if "lab_barcode" not in st.session_state:
-    st.session_state.lab_barcode = {"valor": "123456789", "x": 35, "y": 360}
 
 with st.expander("Cargar plantilla", expanded=True):
     st.write('Admite `.dtl`, `.lab`, `.bak` y `.txt` con `TEXT x,y,"texto"`, `BARCODE x,y,"codigo"` o comandos ZPL.')
@@ -271,15 +269,7 @@ if st.session_state.lab_datamax is not None:
         else:
             cambios.append(st.text_input(f"Texto {indice + 1}", value=texto["valor"], key=f"lab_texto_{indice}"))
     textos_preview = [dict(texto, valor=cambio) for texto, cambio in zip(analisis["textos"], cambios)]
-    st.subheader("Código de barras Code 128")
-    codigo_col, x_col, y_col = st.columns([2, 1, 1])
-    codigo_lab = codigo_col.text_input("Contenido", value=st.session_state.lab_barcode["valor"], key="lab_codigo_barras")
-    x_codigo = x_col.number_input("X", min_value=0, max_value=1264, value=int(st.session_state.lab_barcode["x"]), key="lab_codigo_x")
-    y_codigo = y_col.number_input("Y", min_value=0, max_value=498, value=int(st.session_state.lab_barcode["y"]), key="lab_codigo_y")
-    st.session_state.lab_barcode = {"valor": codigo_lab, "x": x_codigo, "y": y_codigo}
     elementos_preview = elementos_visuales_lab(textos_preview)
-    if codigo_lab.strip():
-        elementos_preview.append({"tipo": "BARCODE", "x": x_codigo, "y": y_codigo, "valor": codigo_lab.strip()})
     st.subheader("Vista previa de la etiqueta")
     lab_ancho = round(107 / 25.4 * 300)
     lab_alto = round(42.2 / 25.4 * 300)
