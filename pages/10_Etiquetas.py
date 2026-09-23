@@ -179,7 +179,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
             .label-text, .barcode, .logo-slot {{ cursor: move; }}
             .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
             .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
-            .barcode {{ cursor: move; outline: 2px solid #1976d2; outline-offset: 3px; }}
+            .barcode {{ cursor: move; outline: 2px solid #1976d2; outline-offset: 3px; touch-action: none; z-index: 20; }}
             .resize-handle {{ position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #1976d2; border: 2px solid white; border-radius: 50%; cursor: nwse-resize; }}
             .barcode img {{ display: block; width: 230px; height: 82px; }}
             .tools {{ display: flex; gap: 8px; align-items: center; margin-top: 8px; }}
@@ -196,18 +196,23 @@ def visor_interactivo_lab(elementos, ancho, alto):
             draggable.forEach((item) => {{
                 item.addEventListener('pointerdown', (event) => {{
                     event.preventDefault();
+                    event.stopPropagation();
                     active = item;
-                    const rect = item.getBoundingClientRect();
                     action = item === barcode && event.target.classList.contains('resize-handle') ? 'resize' : 'move';
                     startX = event.clientX; startY = event.clientY;
-                    startLeft = item.offsetLeft; startTop = item.offsetTop; startWidth = item.offsetWidth;
+                    startLeft = parseFloat(item.style.left) || 0;
+                    startTop = parseFloat(item.style.top) || 0;
+                    startWidth = item.getBoundingClientRect().width;
                     item.setPointerCapture(event.pointerId);
                 }});
                 item.addEventListener('pointermove', (event) => {{
                     if (!action) return;
                     if (action === 'move') {{
-                        active.style.left = Math.max(0, Math.min(label.clientWidth - active.offsetWidth, startLeft + event.clientX - startX)) + 'px';
-                        active.style.top = Math.max(0, Math.min(label.clientHeight - active.offsetHeight, startTop + event.clientY - startY)) + 'px';
+                        const labelRect = label.getBoundingClientRect();
+                        const dx = (event.clientX - startX) / (labelRect.width / label.offsetWidth);
+                        const dy = (event.clientY - startY) / (labelRect.height / label.offsetHeight);
+                        active.style.left = Math.max(0, Math.min(label.offsetWidth - active.offsetWidth, startLeft + dx)) + 'px';
+                        active.style.top = Math.max(0, Math.min(label.offsetHeight - active.offsetHeight, startTop + dy)) + 'px';
                     }} else {{
                         const width = Math.max(90, startWidth + event.clientX - startX);
                         active.style.width = Math.min(label.clientWidth - active.offsetLeft, width) + 'px';
@@ -220,14 +225,33 @@ def visor_interactivo_lab(elementos, ancho, alto):
             }});
             document.getElementById('print').addEventListener('click', () => {{
                 const popup = window.open('', '_blank', 'width=900,height=700');
-                const labelHtml = label.outerHTML;
+                const printLabel = label.cloneNode(true);
+                const sourceWidth = label.offsetWidth;
+                const sourceHeight = label.offsetHeight;
+                const sourceItems = label.querySelectorAll('.label-text, .barcode, .logo-slot');
+                printLabel.style.width = '107mm';
+                printLabel.style.height = '42.2mm';
+                printLabel.style.transform = 'none';
+                printLabel.querySelectorAll('.label-text, .barcode, .logo-slot').forEach((item, index) => {{
+                    const left = parseFloat(item.style.left) || 0;
+                    const top = parseFloat(item.style.top) || 0;
+                    item.style.left = `${{left / sourceWidth * 107}}mm`;
+                    item.style.top = `${{top / sourceHeight * 42.2}}mm`;
+                    if (item.classList.contains('barcode')) {{
+                        const width = sourceItems[index].getBoundingClientRect().width / sourceWidth * 107;
+                        item.style.width = `${{width}}mm`;
+                        item.querySelector('img').style.width = `${{width}}mm`;
+                        item.querySelector('img').style.height = `${{width * 0.36}}mm`;
+                    }}
+                }});
+                const labelHtml = printLabel.outerHTML;
                 popup.document.write(`<html><head><title></title><style>
                     @page {{ size: 107mm 42.2mm; margin: 0; }}
                     html,body {{ margin: 0; padding: 0; width: 107mm; height: 42.2mm; }}
                     html, body {{ width: 107mm; height: 42.2mm; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
                     body {{ margin: 0; padding: 0; overflow: hidden; }}
-                    .print-sheet {{ width: 107mm; height: 42.2mm; margin: 0 auto; display: flex; align-items: center; justify-content: center; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
-                    .label {{ position: relative; flex: 0 0 auto; width: {ancho_visible}px; height: {alto_visible}px; overflow: hidden; transform: scale(${(107 / 25.4 * 96) / ancho_visible}); transform-origin: center center; }}
+                    .print-sheet {{ width: 107mm; height: 42.2mm; margin: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
+                    .label {{ position: relative; flex: 0 0 auto; width: 107mm !important; height: 42.2mm !important; overflow: hidden; transform: none !important; }}
                     .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
                     .label-text {{ font-size: 5.5mm !important; font-weight: 600; }}
                       .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
