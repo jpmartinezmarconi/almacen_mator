@@ -34,6 +34,38 @@ def parsear_dtl(contenido):
     return elementos
 
 
+def parsear_zpl(contenido):
+    elementos = []
+    x_actual, y_actual = 30, 30
+    codigo_de_barras = False
+    tokens = re.finditer(r"\^FO(-?\d+),(-?\d+)|\^BC[^\^]*|\^FD(.*?)\^FS", contenido, re.IGNORECASE | re.DOTALL)
+    for token in tokens:
+        texto = token.group(0)
+        if texto.upper().startswith("^FO"):
+            x_actual, y_actual = int(token.group(1)), int(token.group(2))
+        elif texto.upper().startswith("^BC"):
+            codigo_de_barras = True
+        elif token.group(3) is not None:
+            elementos.append(
+                {
+                    "tipo": "BARCODE" if codigo_de_barras else "TEXT",
+                    "x": x_actual,
+                    "y": y_actual,
+                    "valor": token.group(3).replace("\\,", ",").strip(),
+                }
+            )
+            codigo_de_barras = False
+    if not elementos:
+        raise ValueError("No se encontraron campos de texto o código de barras")
+    return elementos
+
+
+def parsear_plantilla(contenido):
+    if re.search(r"\^(?:XA|FO|BC|FD)", contenido, re.IGNORECASE):
+        return parsear_zpl(contenido)
+    return parsear_dtl(contenido)
+
+
 def zpl_de_elementos(elementos, ancho, alto):
     partes = ["^XA", f"^PW{ancho}", f"^LL{alto}", "^CI28"]
     for elemento in elementos:
@@ -75,15 +107,16 @@ if "elementos_etiqueta" not in st.session_state:
         {"tipo": "BARCODE", "x": 30, "y": 80, "valor": "123456789"},
     ]
 
-with st.expander("Cargar plantilla DTL", expanded=True):
-    st.write('Formato admitido: `TEXT x,y,"texto"` y `BARCODE x,y,"codigo"`, una instrucción por línea.')
-    archivo_dtl = st.file_uploader("Selecciona un archivo .dtl o .txt", type=["dtl", "txt"])
-    if archivo_dtl is not None and st.button("Importar DTL", key="importar_dtl"):
+with st.expander("Cargar plantilla", expanded=True):
+    st.write('Admite `.dtl`, `.lab`, `.bak` y `.txt` con `TEXT x,y,"texto"`, `BARCODE x,y,"codigo"` o comandos ZPL.')
+    archivo_plantilla = st.file_uploader("Selecciona una plantilla", type=["dtl", "lab", "bak", "txt"])
+    if archivo_plantilla is not None and st.button("Importar plantilla", key="importar_plantilla"):
         try:
-            st.session_state.elementos_etiqueta = parsear_dtl(archivo_dtl.getvalue().decode("utf-8-sig"))
+            contenido = archivo_plantilla.getvalue().decode("utf-8-sig")
+            st.session_state.elementos_etiqueta = parsear_plantilla(contenido)
             st.success(f"Se importaron {len(st.session_state.elementos_etiqueta)} elementos.")
         except (UnicodeDecodeError, ValueError) as error:
-            st.error(f"No se pudo importar la plantilla: {error}")
+            st.error(f"No se pudo convertir la plantilla. Comprueba que sea texto o ZPL: {error}")
 
 col_config, col_preview = st.columns([1, 1])
 with col_config:
