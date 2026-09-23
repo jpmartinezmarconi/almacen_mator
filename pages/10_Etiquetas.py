@@ -103,6 +103,12 @@ def analizar_lab(datos):
             if texto and texto not in vistos and not re.fullmatch(r"[0-9]+", texto):
                 vistos.add(texto)
                 encontrados.append({"valor": texto, "indice": coincidencia.start()})
+        encontrados.sort(
+            key=lambda texto: (
+                0 if re.match(r"^MATR[IÍ]CULA\s*:", texto["valor"], re.IGNORECASE) else
+                1 if re.match(r"^AÑO\s*", texto["valor"], re.IGNORECASE) else 2
+            )
+        )
         return {"objetos": objetos, "impresora": impresora, "textos": encontrados}
 
 
@@ -157,6 +163,73 @@ def elementos_visuales_lab(textos):
 def vista_lab_datamax(textos, ancho, alto):
     elementos = elementos_visuales_lab(textos)
     return vista_etiqueta(elementos, ancho, alto)
+
+
+def visor_interactivo_lab(elementos, ancho, alto):
+    etiqueta = vista_etiqueta(elementos, ancho, alto)
+    escala = min(520 / ancho, 260 / alto)
+    ancho_visible = ancho * escala
+    alto_visible = alto * escala
+    return f"""
+        <style>
+            body {{ margin: 0; font-family: Arial, sans-serif; }}
+            .stage {{ min-height: 300px; padding: 14px; background: #edf0f2; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }}
+            .label {{ user-select: none; }}
+            .barcode {{ cursor: move; outline: 2px solid #1976d2; outline-offset: 3px; }}
+            .barcode::after {{ content: ''; position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #1976d2; border: 2px solid white; border-radius: 50%; cursor: nwse-resize; }}
+            .barcode img {{ display: block; width: 230px; height: 82px; }}
+            .tools {{ display: flex; gap: 8px; align-items: center; margin-top: 8px; }}
+            button {{ border: 0; border-radius: 4px; padding: 8px 12px; color: white; background: #d32f2f; cursor: pointer; }}
+            .hint {{ color: #555; font-size: 12px; }}
+        </style>
+        <div class="stage"><div id="label">{etiqueta}</div></div>
+        <div class="tools"><button id="print" type="button">Imprimir etiqueta centrada</button><span class="hint">Arrastra el código azul. Usa el punto azul para cambiar su tamaño.</span></div>
+        <script>
+            const label = document.querySelector('#label .label');
+            const barcode = label ? label.querySelector('.barcode') : null;
+            let action = null, startX = 0, startY = 0, startLeft = 0, startTop = 0, startWidth = 0;
+            if (barcode) {{
+                barcode.addEventListener('pointerdown', (event) => {{
+                    event.preventDefault();
+                    const rect = barcode.getBoundingClientRect();
+                    action = event.clientX > rect.right - 18 && event.clientY > rect.bottom - 18 ? 'resize' : 'move';
+                    startX = event.clientX; startY = event.clientY;
+                    startLeft = barcode.offsetLeft; startTop = barcode.offsetTop; startWidth = barcode.offsetWidth;
+                    barcode.setPointerCapture(event.pointerId);
+                }});
+                barcode.addEventListener('pointermove', (event) => {{
+                    if (!action) return;
+                    if (action === 'move') {{
+                        barcode.style.left = Math.max(0, startLeft + event.clientX - startX) + 'px';
+                        barcode.style.top = Math.max(0, startTop + event.clientY - startY) + 'px';
+                    }} else {{
+                        const width = Math.max(90, startWidth + event.clientX - startX);
+                        barcode.style.width = width + 'px';
+                        barcode.querySelector('img').style.width = width + 'px';
+                        barcode.querySelector('img').style.height = Math.max(45, width * 0.36) + 'px';
+                    }}
+                }});
+                barcode.addEventListener('pointerup', () => action = null);
+                barcode.addEventListener('pointercancel', () => action = null);
+            }}
+            document.getElementById('print').addEventListener('click', () => {{
+                const popup = window.open('', '_blank', 'width=900,height=700');
+                const labelHtml = label.outerHTML;
+                popup.document.write(`<html><head><title>Etiqueta Datamax</title><style>
+                    @page {{ size: 107mm 42.2mm; margin: 0; }}
+                    html,body {{ margin: 0; padding: 0; width: 107mm; height: 42.2mm; }}
+                    body {{ position: relative; }}
+                    .label {{ position: absolute; left: 50%; top: 50%; width: {ancho_visible}px; height: {alto_visible}px; transform: translate(-50%, -50%) scale(${(107 / 25.4 * 96) / ancho_visible}); transform-origin: center center; }}
+                    .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
+                    .label-text {{ font-size: 16px; font-weight: 600; }}
+                    .barcode {{ display: flex; flex-direction: column; align-items: center; outline: none !important; }}
+                    .barcode::after {{ display: none; }}
+                    .barcode img {{ display: block; }}
+                </style></head><body>${{labelHtml}}</body></html>`);
+                popup.document.close(); popup.focus(); popup.print();
+            }});
+        </script>
+        """
 
 
 def zpl_de_elementos(elementos, ancho, alto, oscuridad, velocidad):
@@ -266,6 +339,8 @@ if st.session_state.lab_datamax is not None:
         if matricula:
             numero = st.text_input("Matrícula / código Code 128", value=matricula.group(1).strip(), key=f"lab_matricula_{indice}")
             cambios.append(f"{texto['valor'][:texto['valor'].find(':') + 1]} {numero}")
+        elif re.match(r"^AÑO\s*", texto["valor"], re.IGNORECASE):
+            cambios.append(st.text_input("Año", value=texto["valor"], key=f"lab_ano_{indice}"))
         else:
             cambios.append(st.text_input(f"Texto {indice + 1}", value=texto["valor"], key=f"lab_texto_{indice}"))
     textos_preview = [dict(texto, valor=cambio) for texto, cambio in zip(analisis["textos"], cambios)]
@@ -273,18 +348,7 @@ if st.session_state.lab_datamax is not None:
     st.subheader("Vista previa de la etiqueta")
     lab_ancho = round(107 / 25.4 * 300)
     lab_alto = round(42.2 / 25.4 * 300)
-    st.markdown(
-        """<style>
-        .label-wrap { background: #edf0f2; padding: 24px; min-height: 310px; display: flex; align-items: center; justify-content: center; }
-        .label { position: relative; background: white; border: 1px solid #222; overflow: hidden; font-family: Arial, sans-serif; }
-        .label-text, .barcode { position: absolute; white-space: nowrap; color: #111; }
-        .label-text { font-size: 16px; font-weight: 600; }
-        .barcode { display: flex; flex-direction: column; align-items: center; font-family: monospace; font-size: 11px; }
-        .barcode img { display: block; width: 230px; height: 82px; }
-        </style>"""
-        + f'<div class="label-wrap">{vista_etiqueta(elementos_preview, lab_ancho, lab_alto)}</div>',
-        unsafe_allow_html=True,
-    )
+    components.html(visor_interactivo_lab(elementos_preview, lab_ancho, lab_alto), height=390, scrolling=False)
     editar_col, descargar_col = st.columns(2)
     if editar_col.button("Aplicar cambios al Lab", use_container_width=True):
         try:
@@ -302,18 +366,6 @@ if st.session_state.lab_datamax is not None:
         mime="application/octet-stream",
         use_container_width=True,
         key="descargar_lab_editado",
-    )
-    vista_impresion_lab = vista_etiqueta(elementos_preview, lab_ancho, lab_alto)
-    components.html(
-        f'''<button onclick="imprimirEtiqueta()" style="width:100%;padding:0.55rem;border:1px solid #ff4b4b;border-radius:0.35rem;background:#ff4b4b;color:white;font-weight:600;cursor:pointer">Imprimir vista previa</button>
-<script>
-function imprimirEtiqueta() {{
-  const ventana = window.open('', '_blank', 'width=900,height=700');
-    ventana.document.write('<html><head><title>Etiqueta Datamax</title><style>@page{{size:auto;margin:8mm}}body{{margin:0}}.label-wrap{{display:flex;align-items:center;justify-content:center}}.label{{position:relative;background:white;border:1px solid #222;overflow:hidden;font-family:Arial,sans-serif}}.label-text,.barcode{{position:absolute;white-space:nowrap;color:#111}}.label-text{{font-size:16px;font-weight:600}}.barcode{{display:flex;flex-direction:column;align-items:center;font-family:monospace;font-size:11px}}.bars{{font-size:28px;letter-spacing:2px;line-height:25px}}</style></head><body>' + {json.dumps(vista_impresion_lab)} + '</body></html>');
-  ventana.document.close(); ventana.focus(); ventana.print();
-}}
-</script>''',
-        height=55,
     )
     st.caption("Los textos no pueden superar la longitud reservada por el archivo original. La plantilla se conserva en formato Datamax y no se convierte a ZPL.")
     st.stop()
