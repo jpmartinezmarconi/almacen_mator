@@ -196,6 +196,8 @@ if "plantilla_nativa" not in st.session_state:
     st.session_state.plantilla_nativa = None
 if "lab_datamax" not in st.session_state:
     st.session_state.lab_datamax = None
+if "lab_barcode" not in st.session_state:
+    st.session_state.lab_barcode = {"valor": "123456789", "x": 35, "y": 360}
 
 with st.expander("Cargar plantilla", expanded=True):
     st.write('Admite `.dtl`, `.lab`, `.bak` y `.txt` con `TEXT x,y,"texto"`, `BARCODE x,y,"codigo"` o comandos ZPL.')
@@ -241,6 +243,15 @@ if st.session_state.lab_datamax is not None:
     for indice, texto in enumerate(analisis["textos"]):
         cambios.append(st.text_input(f"Texto {indice + 1}", value=texto["valor"], key=f"lab_texto_{indice}"))
     textos_preview = [dict(texto, valor=cambio) for texto, cambio in zip(analisis["textos"], cambios)]
+    st.subheader("Código de barras Code 128")
+    codigo_col, x_col, y_col = st.columns([2, 1, 1])
+    codigo_lab = codigo_col.text_input("Contenido", value=st.session_state.lab_barcode["valor"], key="lab_codigo_barras")
+    x_codigo = x_col.number_input("X", min_value=0, max_value=1264, value=int(st.session_state.lab_barcode["x"]), key="lab_codigo_x")
+    y_codigo = y_col.number_input("Y", min_value=0, max_value=498, value=int(st.session_state.lab_barcode["y"]), key="lab_codigo_y")
+    st.session_state.lab_barcode = {"valor": codigo_lab, "x": x_codigo, "y": y_codigo}
+    elementos_preview = elementos_visuales_lab(textos_preview)
+    if codigo_lab.strip():
+        elementos_preview.append({"tipo": "BARCODE", "x": x_codigo, "y": y_codigo, "valor": codigo_lab.strip()})
     st.subheader("Vista previa de la etiqueta")
     lab_ancho = round(107 / 25.4 * 300)
     lab_alto = round(42.2 / 25.4 * 300)
@@ -251,8 +262,9 @@ if st.session_state.lab_datamax is not None:
         .label-text, .barcode { position: absolute; white-space: nowrap; color: #111; }
         .label-text { font-size: 16px; font-weight: 600; }
         .barcode { display: flex; flex-direction: column; align-items: center; font-family: monospace; font-size: 11px; }
+        .bars { font-size: 28px; letter-spacing: 2px; line-height: 25px; transform: scaleX(.8); }
         </style>"""
-        + f'<div class="label-wrap">{vista_lab_datamax(textos_preview, lab_ancho, lab_alto)}</div>',
+        + f'<div class="label-wrap">{vista_etiqueta(elementos_preview, lab_ancho, lab_alto)}</div>',
         unsafe_allow_html=True,
     )
     editar_col, descargar_col = st.columns(2)
@@ -273,13 +285,13 @@ if st.session_state.lab_datamax is not None:
         use_container_width=True,
         key="descargar_lab_editado",
     )
-    vista_impresion_lab = vista_lab_datamax(textos_preview, lab_ancho, lab_alto)
+    vista_impresion_lab = vista_etiqueta(elementos_preview, lab_ancho, lab_alto)
     components.html(
         f'''<button onclick="imprimirEtiqueta()" style="width:100%;padding:0.55rem;border:1px solid #ff4b4b;border-radius:0.35rem;background:#ff4b4b;color:white;font-weight:600;cursor:pointer">Imprimir vista previa</button>
 <script>
 function imprimirEtiqueta() {{
   const ventana = window.open('', '_blank', 'width=900,height=700');
-  ventana.document.write('<html><head><title>Etiqueta Datamax</title><style>@page{{size:auto;margin:8mm}}body{{margin:0}}.label-wrap{{display:flex;align-items:center;justify-content:center}}.label{{position:relative;background:white;border:1px solid #222;overflow:hidden;font-family:Arial,sans-serif}}.label-text{{position:absolute;white-space:nowrap;color:#111;font-size:16px;font-weight:600}}</style></head><body>' + {json.dumps(vista_impresion_lab)} + '</body></html>');
+    ventana.document.write('<html><head><title>Etiqueta Datamax</title><style>@page{{size:auto;margin:8mm}}body{{margin:0}}.label-wrap{{display:flex;align-items:center;justify-content:center}}.label{{position:relative;background:white;border:1px solid #222;overflow:hidden;font-family:Arial,sans-serif}}.label-text,.barcode{{position:absolute;white-space:nowrap;color:#111}}.label-text{{font-size:16px;font-weight:600}}.barcode{{display:flex;flex-direction:column;align-items:center;font-family:monospace;font-size:11px}}.bars{{font-size:28px;letter-spacing:2px;line-height:25px}}</style></head><body>' + {json.dumps(vista_impresion_lab)} + '</body></html>');
   ventana.document.close(); ventana.focus(); ventana.print();
 }}
 </script>''',
