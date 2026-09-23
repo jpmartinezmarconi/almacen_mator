@@ -133,6 +133,25 @@ def editar_lab(datos, textos, cambios):
             pass
 
 
+def elementos_visuales_lab(textos):
+    ignorar = re.compile(
+        r"^(Arial|Verdana|Tahoma|Text\d*|Text\d+ Copy.*|Line\d*.*|Image\d*|"
+        r"Min=.*|Max=.*|All Image Files.*|Windows Bitmap.*|C:\\.*|2;0,.*)$",
+        re.IGNORECASE,
+    )
+    visibles = [texto["valor"] for texto in textos if not ignorar.match(texto["valor"])]
+    elementos = []
+    for indice, valor in enumerate(visibles):
+        columna, fila = divmod(indice, 10)
+        elementos.append({"tipo": "TEXT", "x": 35 + columna * 620, "y": 30 + fila * 45, "valor": valor})
+    return elementos
+
+
+def vista_lab_datamax(textos, ancho, alto):
+    elementos = elementos_visuales_lab(textos)
+    return vista_etiqueta(elementos, ancho, alto)
+
+
 def zpl_de_elementos(elementos, ancho, alto, oscuridad, velocidad):
     partes = ["^XA", f"^PW{ancho}", f"^LL{alto}", "^CI28", f"^MD{oscuridad}", f"^PR{velocidad}"]
     for elemento in elementos:
@@ -221,6 +240,21 @@ if st.session_state.lab_datamax is not None:
     cambios = []
     for indice, texto in enumerate(analisis["textos"]):
         cambios.append(st.text_input(f"Texto {indice + 1}", value=texto["valor"], key=f"lab_texto_{indice}"))
+    textos_preview = [dict(texto, valor=cambio) for texto, cambio in zip(analisis["textos"], cambios)]
+    st.subheader("Vista previa de la etiqueta")
+    lab_ancho = round(107 / 25.4 * 300)
+    lab_alto = round(42.2 / 25.4 * 300)
+    st.markdown(
+        """<style>
+        .label-wrap { background: #edf0f2; padding: 24px; min-height: 310px; display: flex; align-items: center; justify-content: center; }
+        .label { position: relative; background: white; border: 1px solid #222; overflow: hidden; font-family: Arial, sans-serif; }
+        .label-text, .barcode { position: absolute; white-space: nowrap; color: #111; }
+        .label-text { font-size: 16px; font-weight: 600; }
+        .barcode { display: flex; flex-direction: column; align-items: center; font-family: monospace; font-size: 11px; }
+        </style>"""
+        + f'<div class="label-wrap">{vista_lab_datamax(textos_preview, lab_ancho, lab_alto)}</div>',
+        unsafe_allow_html=True,
+    )
     editar_col, descargar_col = st.columns(2)
     if editar_col.button("Aplicar cambios al Lab", use_container_width=True):
         try:
@@ -238,6 +272,18 @@ if st.session_state.lab_datamax is not None:
         mime="application/octet-stream",
         use_container_width=True,
         key="descargar_lab_editado",
+    )
+    vista_impresion_lab = vista_lab_datamax(textos_preview, lab_ancho, lab_alto)
+    components.html(
+        f'''<button onclick="imprimirEtiqueta()" style="width:100%;padding:0.55rem;border:1px solid #ff4b4b;border-radius:0.35rem;background:#ff4b4b;color:white;font-weight:600;cursor:pointer">Imprimir vista previa</button>
+<script>
+function imprimirEtiqueta() {{
+  const ventana = window.open('', '_blank', 'width=900,height=700');
+  ventana.document.write('<html><head><title>Etiqueta Datamax</title><style>@page{{size:auto;margin:8mm}}body{{margin:0}}.label-wrap{{display:flex;align-items:center;justify-content:center}}.label{{position:relative;background:white;border:1px solid #222;overflow:hidden;font-family:Arial,sans-serif}}.label-text{{position:absolute;white-space:nowrap;color:#111;font-size:16px;font-weight:600}}</style></head><body>' + {json.dumps(vista_impresion_lab)} + '</body></html>');
+  ventana.document.close(); ventana.focus(); ventana.print();
+}}
+</script>''',
+        height=55,
     )
     st.caption("Los textos no pueden superar la longitud reservada por el archivo original. La plantilla se conserva en formato Datamax y no se convierte a ZPL.")
     st.stop()
