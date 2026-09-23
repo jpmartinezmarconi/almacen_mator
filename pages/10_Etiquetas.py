@@ -66,6 +66,21 @@ def parsear_plantilla(contenido):
     return parsear_dtl(contenido)
 
 
+def decodificar_plantilla(datos):
+    if datos.startswith((b"\xff\xfe", b"\xfe\xff")) or b"\x00" in datos:
+        codificaciones = ("utf-16", "utf-16-le", "utf-16-be")
+    else:
+        codificaciones = ("utf-8-sig", "cp1252", "latin-1")
+    for codificacion in codificaciones:
+        try:
+            return datos.decode(codificacion)
+        except UnicodeDecodeError:
+            continue
+    if b"\x00" in datos:
+        raise ValueError("el archivo parece binario y no una plantilla de texto")
+    raise ValueError("codificación de texto no compatible")
+
+
 def zpl_de_elementos(elementos, ancho, alto, oscuridad, velocidad):
     partes = ["^XA", f"^PW{ancho}", f"^LL{alto}", "^CI28", f"^MD{oscuridad}", f"^PR{velocidad}"]
     for elemento in elementos:
@@ -112,10 +127,10 @@ with st.expander("Cargar plantilla", expanded=True):
     archivo_plantilla = st.file_uploader("Selecciona una plantilla", type=["dtl", "lab", "bak", "txt"])
     if archivo_plantilla is not None and st.button("Importar plantilla", key="importar_plantilla"):
         try:
-            contenido = archivo_plantilla.getvalue().decode("utf-8-sig")
+            contenido = decodificar_plantilla(archivo_plantilla.getvalue())
             st.session_state.elementos_etiqueta = parsear_plantilla(contenido)
             st.success(f"Se importaron {len(st.session_state.elementos_etiqueta)} elementos.")
-        except (UnicodeDecodeError, ValueError) as error:
+        except ValueError as error:
             st.error(f"No se pudo convertir la plantilla. Comprueba que sea texto o ZPL: {error}")
 
 col_config, col_preview = st.columns([1, 1])
