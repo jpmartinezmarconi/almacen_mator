@@ -264,7 +264,12 @@ if st.session_state.lab_datamax is not None:
     st.info(f"Formato nativo detectado. Impresora guardada: {analisis['impresora'] or 'no indicada'}")
     cambios = []
     for indice, texto in enumerate(analisis["textos"]):
-        cambios.append(st.text_input(f"Texto {indice + 1}", value=texto["valor"], key=f"lab_texto_{indice}"))
+        matricula = re.match(r"^MATR[IÍ]CULA\s*:\s*(.+)$", texto["valor"], re.IGNORECASE)
+        if matricula:
+            numero = st.text_input("Matrícula / código Code 128", value=matricula.group(1).strip(), key=f"lab_matricula_{indice}")
+            cambios.append(f"{texto['valor'][:texto['valor'].find(':') + 1]} {numero}")
+        else:
+            cambios.append(st.text_input(f"Texto {indice + 1}", value=texto["valor"], key=f"lab_texto_{indice}"))
     textos_preview = [dict(texto, valor=cambio) for texto, cambio in zip(analisis["textos"], cambios)]
     st.subheader("Código de barras Code 128")
     codigo_col, x_col, y_col = st.columns([2, 1, 1])
