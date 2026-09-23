@@ -3,6 +3,7 @@ import io
 import json
 import re
 import tempfile
+import base64
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -174,11 +175,27 @@ def vista_etiqueta(elementos, ancho, alto):
         y = int(elemento["y"]) * escala
         valor = html.escape(str(elemento["valor"]))
         if elemento["tipo"] == "BARCODE":
-            contenido.append(
-                f'<div class="barcode" style="left:{x}px;top:{y}px">'
-                f'<span class="bars">||||| || ||||| | |||| ||| | |||||</span>'
-                f'<small>{valor}</small></div>'
-            )
+            try:
+                import barcode
+                from barcode.writer import SVGWriter
+
+                codigo = barcode.get("code128", str(elemento["valor"]), writer=SVGWriter())
+                svg = codigo.render(
+                    writer_options={
+                        "module_width": 0.22,
+                        "module_height": 12,
+                        "font_size": 8,
+                        "text_distance": 2,
+                        "quiet_zone": 2,
+                    }
+                )
+                svg_data = base64.b64encode(svg).decode("ascii")
+                contenido.append(
+                    f'<div class="barcode" style="left:{x}px;top:{y}px">'
+                    f'<img src="data:image/svg+xml;base64,{svg_data}" alt="Code 128 {valor}"></div>'
+                )
+            except (ImportError, ValueError):
+                contenido.append(f'<div class="label-text" style="left:{x}px;top:{y}px">Código inválido: {valor}</div>')
         else:
             contenido.append(f'<div class="label-text" style="left:{x}px;top:{y}px">{valor}</div>')
     return f'<div class="label" style="width:{ancho * escala}px;height:{alto * escala}px">{"".join(contenido)}</div>'
@@ -262,7 +279,7 @@ if st.session_state.lab_datamax is not None:
         .label-text, .barcode { position: absolute; white-space: nowrap; color: #111; }
         .label-text { font-size: 16px; font-weight: 600; }
         .barcode { display: flex; flex-direction: column; align-items: center; font-family: monospace; font-size: 11px; }
-        .bars { font-size: 28px; letter-spacing: 2px; line-height: 25px; transform: scaleX(.8); }
+        .barcode img { display: block; width: 230px; height: 82px; }
         </style>"""
         + f'<div class="label-wrap">{vista_etiqueta(elementos_preview, lab_ancho, lab_alto)}</div>',
         unsafe_allow_html=True,
@@ -365,7 +382,7 @@ with col_preview:
         .label-text, .barcode { position: absolute; white-space: nowrap; color: #111; }
         .label-text { font-size: 16px; font-weight: 600; }
         .barcode { display: flex; flex-direction: column; align-items: center; font-family: monospace; font-size: 11px; }
-        .bars { font-size: 28px; letter-spacing: 2px; line-height: 25px; transform: scaleX(.8); }
+        .barcode img { display: block; width: 230px; height: 82px; }
         </style>"""
         + f'<div class="label-wrap">{vista_etiqueta(st.session_state.elementos_etiqueta, int(ancho), int(alto))}</div>',
         unsafe_allow_html=True,

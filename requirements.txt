@@ -7,3 +7,4 @@ xlrd
 zxing-cpp
 psycopg2-binary
 olefile
+python-barcode
