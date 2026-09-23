@@ -1,6 +1,8 @@
 import html
+import io
 import json
 import re
+import tempfile
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -85,6 +87,52 @@ def nombre_sin_extension(nombre):
     return re.sub(r"\.[^.]+$", "", nombre)
 
 
+def analizar_lab(datos):
+    import olefile
+
+    with olefile.OleFileIO(io.BytesIO(datos)) as archivo:
+        objetos = archivo.openstream(["Objects"]).read()
+        impresora = ""
+        if archivo.exists("Printer"):
+            impresora = archivo.openstream(["Printer"]).read().decode("utf-16le", errors="ignore")
+        encontrados = []
+        vistos = set()
+        for coincidencia in re.finditer(rb"(?:[ -~\xA0-\xFF]\x00){4,}", objetos):
+            texto = coincidencia.group().decode("utf-16le", errors="ignore").strip(" \x00")
+            if texto and texto not in vistos and not re.fullmatch(r"[0-9]+", texto):
+                vistos.add(texto)
+                encontrados.append({"valor": texto, "indice": coincidencia.start()})
+        return {"objetos": objetos, "impresora": impresora, "textos": encontrados}
+
+
+def editar_lab(datos, textos, cambios):
+    import olefile
+
+    descriptor, ruta = tempfile.mkstemp(suffix=".Lab")
+    try:
+        with open(descriptor, "wb", closefd=True) as temporal:
+            temporal.write(datos)
+        with olefile.OleFileIO(ruta, write_mode=True) as archivo:
+            objetos = bytearray(archivo.openstream(["Objects"]).read())
+            for original, cambio in zip(textos, cambios):
+                original_bytes = original["valor"].encode("utf-16le")
+                cambio_bytes = cambio.encode("utf-16le")
+                if len(cambio_bytes) > len(original_bytes):
+                    raise ValueError(f"El texto '{original['valor']}' no puede superar {len(original['valor'])} caracteres.")
+                inicio = original["indice"]
+                reemplazo = cambio_bytes.ljust(len(original_bytes), b"\x00")
+                objetos[inicio:inicio + len(original_bytes)] = reemplazo
+            archivo.write_stream(["Objects"], bytes(objetos))
+        with open(ruta, "rb") as temporal:
+            return temporal.read()
+    finally:
+        try:
+            import os
+            os.unlink(ruta)
+        except OSError:
+            pass
+
+
 def zpl_de_elementos(elementos, ancho, alto, oscuridad, velocidad):
     partes = ["^XA", f"^PW{ancho}", f"^LL{alto}", "^CI28", f"^MD{oscuridad}", f"^PR{velocidad}"]
     for elemento in elementos:
@@ -127,12 +175,26 @@ if "elementos_etiqueta" not in st.session_state:
     ]
 if "plantilla_nativa" not in st.session_state:
     st.session_state.plantilla_nativa = None
+if "lab_datamax" not in st.session_state:
+    st.session_state.lab_datamax = None
 
 with st.expander("Cargar plantilla", expanded=True):
     st.write('Admite `.dtl`, `.lab`, `.bak` y `.txt` con `TEXT x,y,"texto"`, `BARCODE x,y,"codigo"` o comandos ZPL.')
     archivo_plantilla = st.file_uploader("Selecciona una plantilla", type=["dtl", "lab", "bak", "txt"])
     if archivo_plantilla is not None and st.button("Importar plantilla", key="importar_plantilla"):
         datos_plantilla = archivo_plantilla.getvalue()
+        if datos_plantilla.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
+            try:
+                st.session_state.lab_datamax = {
+                    "nombre": archivo_plantilla.name,
+                    "datos": datos_plantilla,
+                    "analisis": analizar_lab(datos_plantilla),
+                }
+                st.session_state.plantilla_nativa = None
+                st.success("Archivo Lab Datamax cargado sin convertirlo a ZPL.")
+            except (ImportError, ValueError, OSError) as error:
+                st.error(f"No se pudo leer el contenedor Lab: {error}")
+            st.rerun()
         try:
             contenido = decodificar_plantilla(datos_plantilla)
             st.session_state.elementos_etiqueta = parsear_plantilla(contenido)
@@ -150,6 +212,35 @@ with st.expander("Cargar plantilla", expanded=True):
                 "error": str(error),
             }
             st.warning("Se conservará en formato Datamax nativo. No se convertirá a ZPL.")
+
+if st.session_state.lab_datamax is not None:
+    lab = st.session_state.lab_datamax
+    analisis = lab["analisis"]
+    st.subheader("Editor Datamax Lab")
+    st.info(f"Formato nativo detectado. Impresora guardada: {analisis['impresora'] or 'no indicada'}")
+    cambios = []
+    for indice, texto in enumerate(analisis["textos"]):
+        cambios.append(st.text_input(f"Texto {indice + 1}", value=texto["valor"], key=f"lab_texto_{indice}"))
+    editar_col, descargar_col = st.columns(2)
+    if editar_col.button("Aplicar cambios al Lab", use_container_width=True):
+        try:
+            lab["datos"] = editar_lab(lab["datos"], analisis["textos"], cambios)
+            lab["analisis"] = analizar_lab(lab["datos"])
+            st.session_state.lab_datamax = lab
+            st.success("Cambios aplicados al archivo Lab nativo.")
+            st.rerun()
+        except (ValueError, OSError) as error:
+            st.error(str(error))
+    descargar_col.download_button(
+        "Descargar Lab editado",
+        data=lab["datos"],
+        file_name=f"{nombre_sin_extension(lab['nombre'])}_editado.Lab",
+        mime="application/octet-stream",
+        use_container_width=True,
+        key="descargar_lab_editado",
+    )
+    st.caption("Los textos no pueden superar la longitud reservada por el archivo original. La plantilla se conserva en formato Datamax y no se convierte a ZPL.")
+    st.stop()
 
 if st.session_state.plantilla_nativa is not None:
     plantilla = st.session_state.plantilla_nativa

@@ -6,3 +6,4 @@ openpyxl
 xlrd
 zxing-cpp
 psycopg2-binary
+olefile
