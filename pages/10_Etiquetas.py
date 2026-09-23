@@ -167,7 +167,7 @@ def vista_lab_datamax(textos, ancho, alto):
 
 def visor_interactivo_lab(elementos, ancho, alto):
     etiqueta = vista_etiqueta(elementos, ancho, alto)
-    escala = min(520 / ancho, 260 / alto)
+    escala = min(460 / ancho, 220 / alto)
     ancho_visible = ancho * escala
     alto_visible = alto * escala
     return f"""
@@ -175,6 +175,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
             body {{ margin: 0; font-family: Arial, sans-serif; }}
             .stage {{ min-height: 300px; padding: 14px; background: #edf0f2; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }}
             .label {{ user-select: none; }}
+            .label-text, .barcode, .logo-slot {{ cursor: move; }}
             .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
             .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
             .barcode {{ cursor: move; outline: 2px solid #1976d2; outline-offset: 3px; }}
@@ -189,31 +190,33 @@ def visor_interactivo_lab(elementos, ancho, alto):
         <script>
             const label = document.querySelector('#label .label');
             const barcode = label ? label.querySelector('.barcode') : null;
-            let action = null, startX = 0, startY = 0, startLeft = 0, startTop = 0, startWidth = 0;
-            if (barcode) {{
-                barcode.addEventListener('pointerdown', (event) => {{
+            const draggable = label ? label.querySelectorAll('.label-text, .barcode, .logo-slot') : [];
+            let action = null, active = null, startX = 0, startY = 0, startLeft = 0, startTop = 0, startWidth = 0;
+            draggable.forEach((item) => {{
+                item.addEventListener('pointerdown', (event) => {{
                     event.preventDefault();
-                    const rect = barcode.getBoundingClientRect();
-                    action = event.clientX > rect.right - 18 && event.clientY > rect.bottom - 18 ? 'resize' : 'move';
+                    active = item;
+                    const rect = item.getBoundingClientRect();
+                    action = item === barcode && event.clientX > rect.right - 18 && event.clientY > rect.bottom - 18 ? 'resize' : 'move';
                     startX = event.clientX; startY = event.clientY;
-                    startLeft = barcode.offsetLeft; startTop = barcode.offsetTop; startWidth = barcode.offsetWidth;
-                    barcode.setPointerCapture(event.pointerId);
+                    startLeft = item.offsetLeft; startTop = item.offsetTop; startWidth = item.offsetWidth;
+                    item.setPointerCapture(event.pointerId);
                 }});
-                barcode.addEventListener('pointermove', (event) => {{
+                item.addEventListener('pointermove', (event) => {{
                     if (!action) return;
                     if (action === 'move') {{
-                        barcode.style.left = Math.max(0, startLeft + event.clientX - startX) + 'px';
-                        barcode.style.top = Math.max(0, startTop + event.clientY - startY) + 'px';
+                        active.style.left = Math.max(0, Math.min(label.clientWidth - active.offsetWidth, startLeft + event.clientX - startX)) + 'px';
+                        active.style.top = Math.max(0, Math.min(label.clientHeight - active.offsetHeight, startTop + event.clientY - startY)) + 'px';
                     }} else {{
                         const width = Math.max(90, startWidth + event.clientX - startX);
-                        barcode.style.width = width + 'px';
-                        barcode.querySelector('img').style.width = width + 'px';
-                        barcode.querySelector('img').style.height = Math.max(45, width * 0.36) + 'px';
+                        active.style.width = Math.min(label.clientWidth - active.offsetLeft, width) + 'px';
+                        active.querySelector('img').style.width = width + 'px';
+                        active.querySelector('img').style.height = Math.max(45, width * 0.36) + 'px';
                     }}
                 }});
-                barcode.addEventListener('pointerup', () => action = null);
-                barcode.addEventListener('pointercancel', () => action = null);
-            }}
+                item.addEventListener('pointerup', () => {{ action = null; active = null; }});
+                item.addEventListener('pointercancel', () => {{ action = null; active = null; }});
+            }});
             document.getElementById('print').addEventListener('click', () => {{
                 const popup = window.open('', '_blank', 'width=900,height=700');
                 const labelHtml = label.outerHTML;
