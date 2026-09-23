@@ -15,11 +15,18 @@ if password != "ju@n":
 
 conn = get_conn()
 cur = conn.cursor()
+MAX_ALBARANES_PROCESANDO = 20
 
 cur.execute("SELECT * FROM albaranes WHERE estado='entrada'")
 pendientes = cur.fetchall()
+cur.execute("SELECT COUNT(*) FROM albaranes WHERE estado='procesando'")
+albaranes_en_proceso = cur.fetchone()[0]
 
 st.subheader("Albaranes pendientes")
+st.caption(f"Albaranes en procesando: {albaranes_en_proceso}/{MAX_ALBARANES_PROCESANDO}")
+
+if albaranes_en_proceso >= MAX_ALBARANES_PROCESANDO:
+    st.warning("Se ha alcanzado el máximo de 20 albaranes en procesando. Finaliza alguno antes de añadir otro.")
 
 for albaran in pendientes:
     id_, nombre, empresa, solicitado_por, materiales, comentario, envio_recogida, estado, obs, msg_final, fecha, foto_preparacion = albaran
@@ -32,18 +39,18 @@ for albaran in pendientes:
         st.write(f"Entrega: {envio_recogida}")
 
         st.subheader("Observaciones internas")
-        nuevas_obs = st.text_area("Añadir observaciones", value=obs)
-
-        st.subheader("Mensaje para pantalla Finalizados")
-        mensaje_final = st.text_area("Mensaje final", value=msg_final)
+        nuevas_obs = st.text_area("Añadir observaciones", value=obs, key=f"observaciones_{id_}")
 
         st.subheader("Lectura de código de barras")
-        codigo = st.text_input("Escanea el código aquí (lector Zebra)")
+        codigo = st.text_input("Escanea el código aquí (lector Zebra)", key=f"codigo_{id_}")
         st.write(f"Código leído: {codigo}")
 
-        imagen = st.camera_input("O usa la cámara de la Zebra")
+        imagen = st.camera_input("O usa la cámara de la Zebra", key=f"imagen_{id_}")
 
-        if st.button(f"Marcar como procesado #{id_}"):
+        if st.button(f"Marcar como procesado #{id_}", key=f"procesar_{id_}"):
+            if albaranes_en_proceso >= MAX_ALBARANES_PROCESANDO:
+                st.error("No puedes tener más de 20 albaranes en procesando a la vez.")
+                continue
             if imagen is None:
                 st.error("Debes sacar una foto de la preparación antes de marcar el albarán como procesado.")
                 continue
@@ -54,8 +61,8 @@ for albaran in pendientes:
                 archivo_foto.write(imagen.getvalue())
 
             cur.execute("""
-                UPDATE albaranes SET estado='procesando', observaciones=?, mensaje_final=?, foto_preparacion=?
+                UPDATE albaranes SET estado='procesando', observaciones=?, foto_preparacion=?
                 WHERE id=?
-            """, (nuevas_obs, mensaje_final, ruta_foto, id_))
+            """, (nuevas_obs, ruta_foto, id_))
             conn.commit()
             st.success("Albarán actualizado")

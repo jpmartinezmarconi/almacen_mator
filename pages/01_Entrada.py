@@ -86,6 +86,7 @@ if st.button("Enviar albarán"):
     )
 
     st.success("Albarán enviado correctamente")
+    st.info("Revisar en Finalizados cuando el albarán esté procesado.")
     st.info(f"Excel generado en: {ruta_excel}")
     if not telegram_enviado:
         st.error(f"El albarán se guardó, pero Telegram respondió: {telegram_error}")

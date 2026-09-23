@@ -24,6 +24,7 @@ paginas = [
     ("pages/06_Reparaciones.py", "Reparaciones", "🔧"),
     ("pages/08_Reparaciones_en_proceso.py", "Reparaciones en proceso", "🛠️"),
     ("pages/09_Reparaciones_finalizadas.py", "Reparaciones finalizadas", "📦"),
+    ("pages/10_Etiquetas.py", "Etiquetas", "🏷️"),
 ]
 
 for ruta, nombre, icono in paginas:
