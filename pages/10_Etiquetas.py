@@ -66,8 +66,8 @@ def parsear_plantilla(contenido):
     return parsear_dtl(contenido)
 
 
-def zpl_de_elementos(elementos, ancho, alto):
-    partes = ["^XA", f"^PW{ancho}", f"^LL{alto}", "^CI28"]
+def zpl_de_elementos(elementos, ancho, alto, oscuridad, velocidad):
+    partes = ["^XA", f"^PW{ancho}", f"^LL{alto}", "^CI28", f"^MD{oscuridad}", f"^PR{velocidad}"]
     for elemento in elementos:
         x, y = max(0, int(elemento["x"])), max(0, int(elemento["y"]))
         seguro = str(elemento["valor"]).replace("^", " ").replace("\\", "\\\\")
@@ -121,9 +121,11 @@ with st.expander("Cargar plantilla", expanded=True):
 col_config, col_preview = st.columns([1, 1])
 with col_config:
     st.subheader("Diseño editable")
-    dpi = st.selectbox("Resolución de la impresora", [203, 300, 600], index=0, format_func=lambda valor: f"{valor} dpi")
+    dpi = st.selectbox("Resolución de la impresora", [203, 300, 600], index=1, format_func=lambda valor: f"{valor} dpi")
     ancho_mm = st.number_input("Ancho de etiqueta (mm)", min_value=10.0, max_value=300.0, value=107.0, step=0.1, format="%.1f")
     alto_mm = st.number_input("Alto de etiqueta (mm)", min_value=10.0, max_value=200.0, value=42.2, step=0.1, format="%.1f")
+    oscuridad = st.number_input("Oscuridad", min_value=0, max_value=30, value=30, step=1)
+    velocidad = st.number_input("Velocidad de impresión", min_value=1, max_value=15, value=5, step=1)
     ancho = round(ancho_mm / 25.4 * dpi)
     alto = round(alto_mm / 25.4 * dpi)
     st.caption(f"Tamaño ZPL calculado: {ancho} × {alto} puntos")
@@ -160,7 +162,7 @@ with col_preview:
         unsafe_allow_html=True,
     )
 
-zpl = zpl_de_elementos(st.session_state.elementos_etiqueta, int(ancho), int(alto))
+zpl = zpl_de_elementos(st.session_state.elementos_etiqueta, int(ancho), int(alto), int(oscuridad), int(velocidad))
 vista_impresion = vista_etiqueta(st.session_state.elementos_etiqueta, int(ancho), int(alto))
 st.subheader("Salida ZPL")
 st.code(zpl, language="text")
