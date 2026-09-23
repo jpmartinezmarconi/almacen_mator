@@ -81,6 +81,10 @@ def decodificar_plantilla(datos):
     raise ValueError("codificación de texto no compatible")
 
 
+def nombre_sin_extension(nombre):
+    return re.sub(r"\.[^.]+$", "", nombre)
+
+
 def zpl_de_elementos(elementos, ancho, alto, oscuridad, velocidad):
     partes = ["^XA", f"^PW{ancho}", f"^LL{alto}", "^CI28", f"^MD{oscuridad}", f"^PR{velocidad}"]
     for elemento in elementos:
@@ -114,24 +118,65 @@ def vista_etiqueta(elementos, ancho, alto):
 
 
 st.title("Etiquetas")
-st.caption("Carga una plantilla DTL, ajusta sus elementos y genera ZPL para una impresora Zebra.")
+st.caption("Edita etiquetas Zebra o Datamax y conserva el formato original cuando no sea necesario convertirlo.")
 
 if "elementos_etiqueta" not in st.session_state:
     st.session_state.elementos_etiqueta = [
         {"tipo": "TEXT", "x": 30, "y": 30, "valor": "Almacén Mator"},
         {"tipo": "BARCODE", "x": 30, "y": 80, "valor": "123456789"},
     ]
+if "plantilla_nativa" not in st.session_state:
+    st.session_state.plantilla_nativa = None
 
 with st.expander("Cargar plantilla", expanded=True):
     st.write('Admite `.dtl`, `.lab`, `.bak` y `.txt` con `TEXT x,y,"texto"`, `BARCODE x,y,"codigo"` o comandos ZPL.')
     archivo_plantilla = st.file_uploader("Selecciona una plantilla", type=["dtl", "lab", "bak", "txt"])
     if archivo_plantilla is not None and st.button("Importar plantilla", key="importar_plantilla"):
+        datos_plantilla = archivo_plantilla.getvalue()
         try:
-            contenido = decodificar_plantilla(archivo_plantilla.getvalue())
+            contenido = decodificar_plantilla(datos_plantilla)
             st.session_state.elementos_etiqueta = parsear_plantilla(contenido)
+            st.session_state.plantilla_nativa = None
             st.success(f"Se importaron {len(st.session_state.elementos_etiqueta)} elementos.")
         except ValueError as error:
-            st.error(f"No se pudo convertir la plantilla. Comprueba que sea texto o ZPL: {error}")
+            try:
+                contenido = decodificar_plantilla(datos_plantilla)
+            except ValueError:
+                contenido = None
+            st.session_state.plantilla_nativa = {
+                "nombre": archivo_plantilla.name,
+                "datos": datos_plantilla,
+                "contenido": contenido,
+                "error": str(error),
+            }
+            st.warning("Se conservará en formato Datamax nativo. No se convertirá a ZPL.")
+
+if st.session_state.plantilla_nativa is not None:
+    plantilla = st.session_state.plantilla_nativa
+    st.subheader("Plantilla Datamax nativa")
+    st.info("Este archivo no se interpreta como ZPL. Puedes editar su fuente si es texto y descargarlo para enviarlo a la impresora Datamax.")
+    if plantilla["contenido"] is None:
+        st.error("El archivo es binario propietario. Se puede conservar y descargar, pero no editarlo como texto sin la aplicación Datamax que lo creó.")
+        st.download_button(
+            "Descargar plantilla Datamax original",
+            data=plantilla["datos"],
+            file_name=plantilla["nombre"],
+            mime="application/octet-stream",
+            key="descargar_datamax_binario",
+        )
+        st.stop()
+    contenido_editado = st.text_area("Contenido editable", value=plantilla["contenido"], height=360, key="contenido_datamax")
+    extension = re.search(r"\.[^.]+$", plantilla["nombre"])
+    nombre_editado = f"{nombre_sin_extension(plantilla['nombre'])}_editada{extension.group(0) if extension else '.dtl'}"
+    st.download_button(
+        "Descargar plantilla Datamax editada",
+        data=contenido_editado.encode("cp1252", errors="replace"),
+        file_name=nombre_editado,
+        mime="application/octet-stream",
+        key="descargar_datamax_texto",
+    )
+    st.caption("Envía este archivo a la impresora Datamax con su controlador o software de impresión. El navegador no puede enviar archivos nativos directamente al puerto de la impresora.")
+    st.stop()
 
 col_config, col_preview = st.columns([1, 1])
 with col_config:
