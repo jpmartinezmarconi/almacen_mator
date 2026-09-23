@@ -174,14 +174,14 @@ def visor_interactivo_lab(elementos, ancho, alto):
         <style>
             body {{ margin: 0; font-family: Arial, sans-serif; }}
             .stage {{ min-height: 300px; padding: 14px; background: #edf0f2; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }}
-            .label {{ position: relative; user-select: none; overflow: hidden; }}
+            .label {{ position: relative; user-select: none; overflow: hidden; border: 1px solid #222; box-sizing: border-box; }}
             .label-text {{ position: absolute; white-space: nowrap; color: #111; }}
             .label-text, .barcode, .logo-slot {{ cursor: move; }}
             .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
             .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
             .barcode {{ cursor: move; outline: 2px solid #1976d2; outline-offset: 3px; touch-action: none; z-index: 20; }}
             .resize-handle {{ position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #1976d2; border: 2px solid white; border-radius: 50%; cursor: nwse-resize; }}
-            .barcode img {{ display: block; width: 230px; height: 82px; }}
+            .barcode img {{ display: block; width: 230px; height: 82px; pointer-events: none; }}
             .tools {{ display: flex; gap: 8px; align-items: center; margin-top: 8px; }}
             button {{ border: 0; border-radius: 4px; padding: 8px 12px; color: white; background: #d32f2f; cursor: pointer; }}
             .hint {{ color: #555; font-size: 12px; }}
@@ -198,7 +198,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     event.preventDefault();
                     event.stopPropagation();
                     active = item;
-                    action = item === barcode && event.target.classList.contains('resize-handle') ? 'resize' : 'move';
+                    action = item === barcode && event.target.closest('.resize-handle') ? 'resize' : 'move';
                     startX = event.clientX; startY = event.clientY;
                     startLeft = parseFloat(item.style.left) || 0;
                     startTop = parseFloat(item.style.top) || 0;
@@ -246,12 +246,12 @@ def visor_interactivo_lab(elementos, ancho, alto):
                 }});
                 const labelHtml = printLabel.outerHTML;
                 popup.document.write(`<html><head><title></title><style>
-                    @page {{ size: 107mm 42.2mm; margin: 0; }}
+                    @page {{ size: 107mm 42.2mm landscape; margin: 0; }}
                     html,body {{ margin: 0; padding: 0; width: 107mm; height: 42.2mm; }}
                     html, body {{ width: 107mm; height: 42.2mm; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
                     body {{ margin: 0; padding: 0; overflow: hidden; }}
                     .print-sheet {{ width: 107mm; height: 42.2mm; margin: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
-                    .label {{ position: relative; flex: 0 0 auto; width: 107mm !important; height: 42.2mm !important; overflow: hidden; transform: none !important; }}
+                    .label {{ position: relative; flex: 0 0 auto; width: 107mm !important; height: 42.2mm !important; overflow: hidden; border: 1px solid #222; box-sizing: border-box; transform: none !important; }}
                     .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
                     .label-text {{ font-size: 5.5mm !important; font-weight: 600; }}
                       .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
