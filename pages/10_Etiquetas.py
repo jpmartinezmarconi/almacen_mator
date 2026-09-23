@@ -200,8 +200,10 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     active = item;
                     action = item === barcode && event.target.closest('.resize-handle') ? 'resize' : 'move';
                     startX = event.clientX; startY = event.clientY;
-                    startLeft = parseFloat(item.style.left) || 0;
-                    startTop = parseFloat(item.style.top) || 0;
+                    const labelRect = label.getBoundingClientRect();
+                    const itemRect = item.getBoundingClientRect();
+                    startLeft = (itemRect.left - labelRect.left) / (labelRect.width / label.offsetWidth);
+                    startTop = (itemRect.top - labelRect.top) / (labelRect.height / label.offsetHeight);
                     startWidth = item.getBoundingClientRect().width;
                     item.setPointerCapture(event.pointerId);
                 }});
@@ -211,8 +213,10 @@ def visor_interactivo_lab(elementos, ancho, alto):
                         const labelRect = label.getBoundingClientRect();
                         const dx = (event.clientX - startX) / (labelRect.width / label.offsetWidth);
                         const dy = (event.clientY - startY) / (labelRect.height / label.offsetHeight);
-                        active.style.left = Math.max(0, Math.min(label.offsetWidth - active.offsetWidth, startLeft + dx)) + 'px';
-                        active.style.top = Math.max(0, Math.min(label.offsetHeight - active.offsetHeight, startTop + dy)) + 'px';
+                        const nextLeft = Math.max(0, Math.min(label.offsetWidth - active.offsetWidth, startLeft + dx));
+                        const nextTop = Math.max(0, Math.min(label.offsetHeight - active.offsetHeight, startTop + dy));
+                        active.style.left = `${{nextLeft}}px`;
+                        active.style.top = `${{nextTop}}px`;
                     }} else {{
                         const width = Math.max(90, startWidth + event.clientX - startX);
                         active.style.width = Math.min(label.clientWidth - active.offsetLeft, width) + 'px';
@@ -253,7 +257,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     .print-sheet {{ width: 107mm; height: 42.2mm; margin: 0; display: block; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
                     .label {{ position: relative; display: block; width: 107mm !important; height: 42.2mm !important; overflow: hidden; border: 1px solid #222; box-sizing: border-box; transform: none !important; }}
                     .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
-                    .label-text {{ font-size: 5.5mm !important; font-weight: 600; }}
+                    .label-text {{ font-size: 5.5pt !important; font-weight: 600; }}
                       .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
                       .logo-slot img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
                     .barcode {{ display: flex; flex-direction: column; align-items: center; outline: none !important; }}
