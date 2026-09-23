@@ -174,7 +174,7 @@ def visor_interactivo_lab(elementos, ancho, alto):
         <style>
             body {{ margin: 0; font-family: Arial, sans-serif; }}
             .stage {{ min-height: 300px; padding: 14px; background: #edf0f2; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }}
-            .label {{ user-select: none; }}
+            .label {{ position: relative; user-select: none; overflow: hidden; }}
             .label-text {{ position: absolute; white-space: nowrap; color: #111; }}
             .label-text, .barcode, .logo-slot {{ cursor: move; }}
             .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
@@ -225,7 +225,9 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     @page {{ size: 107mm 42.2mm; margin: 0; }}
                     html,body {{ margin: 0; padding: 0; width: 107mm; height: 42.2mm; }}
                     body {{ position: relative; }}
-                    .label {{ position: absolute; left: 50%; top: 50%; width: {ancho_visible}px; height: {alto_visible}px; transform: translate(-50%, -50%) scale(${(107 / 25.4 * 96) / ancho_visible}); transform-origin: center center; }}
+                    html, body {{ width: 107mm; height: 42.2mm; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
+                    body {{ position: relative; margin: 0; padding: 0; overflow: hidden; }}
+                    .label {{ position: absolute; left: 50%; top: 50%; width: {ancho_visible}px; height: {alto_visible}px; overflow: hidden; transform: translate(-50%, -50%) scale(${(107 / 25.4 * 96) / ancho_visible}); transform-origin: center center; }}
                     .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
                     .label-text {{ font-size: 5.5mm !important; font-weight: 600; }}
                       .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
