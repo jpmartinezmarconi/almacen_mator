@@ -250,8 +250,8 @@ def visor_interactivo_lab(elementos, ancho, alto):
                     html,body {{ margin: 0; padding: 0; width: 107mm; height: 42.2mm; }}
                     html, body {{ width: 107mm; height: 42.2mm; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
                     body {{ margin: 0; padding: 0; overflow: hidden; }}
-                    .print-sheet {{ width: 107mm; height: 42.2mm; margin: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
-                    .label {{ position: relative; flex: 0 0 auto; width: 107mm !important; height: 42.2mm !important; overflow: hidden; border: 1px solid #222; box-sizing: border-box; transform: none !important; }}
+                    .print-sheet {{ width: 107mm; height: 42.2mm; margin: 0; display: block; overflow: hidden; break-after: avoid; page-break-after: avoid; }}
+                    .label {{ position: relative; display: block; width: 107mm !important; height: 42.2mm !important; overflow: hidden; border: 1px solid #222; box-sizing: border-box; transform: none !important; }}
                     .label-text,.barcode {{ position: absolute; white-space: nowrap; color: #111; }}
                     .label-text {{ font-size: 5.5mm !important; font-weight: 600; }}
                       .logo-slot {{ position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }}
