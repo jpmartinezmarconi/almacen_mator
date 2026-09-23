@@ -154,7 +154,7 @@ def elementos_visuales_lab(textos):
         y = 30 + fila * 45
         matricula = re.match(r"^MATR[IÍ]CULA\s*:\s*(.+)$", valor, re.IGNORECASE)
         if matricula:
-            elementos.append({"tipo": "BARCODE", "x": 700, "y": 330, "valor": matricula.group(1).strip()})
+            elementos.append({"tipo": "BARCODE", "x": 353, "y": 300, "valor": matricula.group(1).strip()})
         else:
             elementos.append({"tipo": "TEXT", "x": x, "y": y, "valor": valor})
     return elementos
@@ -255,7 +255,7 @@ def vista_etiqueta(elementos, ancho, alto):
     contenido = []
     fuente_px = 5.5 / 25.4 * 300 * escala
     logo_x = 35 * escala
-    logo_y = 360 * escala
+    logo_y = 15 * escala
     logo_ancho = 280 * escala
     logo_alto = 85 * escala
     contenido.append(
