@@ -62,18 +62,22 @@ class PostgresConnection:
         self._connection.close()
 
 def _seed_almacen_secciones(connection):
+    secciones_existentes = {
+        fila[1]: fila[0]
+        for fila in connection.execute("SELECT id, nombre FROM almacen_secciones").fetchall()
+    }
+    ubicaciones_existentes = {
+        fila[0]
+        for fila in connection.execute("SELECT codigo FROM almacen_ubicaciones").fetchall()
+    }
     for nombre in DEFAULT_ALMACEN_SECCIONES:
         descripcion = 'Estanterias "Huecos"' if nombre in {
             "A1", "A2", "B1", "B2", "B3", "C1", "C2", "C3",
             "D1", "D2", "D3", "E1", "E2", "E3", "F1", "F2", "F3",
             "G2", "G3", "H2", "H3", "I2", "I3", "J2", "J3", "K2", "K3",
         } else ""
-        existente = connection.execute(
-            "SELECT id FROM almacen_secciones WHERE nombre=?", (nombre,)
-        ).fetchone()
-        if existente:
-            seccion_id = existente[0]
-        else:
+        seccion_id = secciones_existentes.get(nombre)
+        if seccion_id is None:
             connection.execute(
                 "INSERT INTO almacen_secciones "
                 "(nombre, descripcion, filas, columnas, alto_m, ancho_m, fondo_m, capacidad_palets) "
@@ -83,18 +87,17 @@ def _seed_almacen_secciones(connection):
             seccion_id = connection.execute(
                 "SELECT id FROM almacen_secciones WHERE nombre=?", (nombre,)
             ).fetchone()[0]
+            secciones_existentes[nombre] = seccion_id
 
         codigo = f"{nombre}-R01-C01"
-        ubicacion = connection.execute(
-            "SELECT id FROM almacen_ubicaciones WHERE codigo=?", (codigo,)
-        ).fetchone()
-        if not ubicacion:
+        if codigo not in ubicaciones_existentes:
             connection.execute(
                 "INSERT INTO almacen_ubicaciones "
                 "(seccion_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m) "
                 "VALUES (?, ?, 1, 1, 1, 2.5, 1.2, 1.2)",
                 (seccion_id, codigo),
             )
+            ubicaciones_existentes.add(codigo)
 def _postgres_columns(connection, table):
     cursor = connection.cursor()
     cursor.execute(
