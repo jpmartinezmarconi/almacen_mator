@@ -36,6 +36,10 @@ def filas_a_dataframe(filas, columnas):
     return pd.DataFrame(filas, columns=columnas) if filas else pd.DataFrame(columns=columnas)
 
 
+def clave_ubicacion(valor):
+    return re.sub(r"[^A-Z0-9]", "", str(valor).strip().upper())
+
+
 capacidad_total, palets_ocupados = resumen_almacen()
 porcentaje = (palets_ocupados / capacidad_total * 100) if capacidad_total else 0
 metricas = st.columns(4)
@@ -324,20 +328,20 @@ with pestanas[3]:
                     for seccion in secciones:
                         espacios = listar_ubicaciones(seccion[0])
                         for ubicacion in espacios:
-                            ubicaciones[ubicacion[1].strip().upper()] = ubicacion[0]
+                            ubicaciones[clave_ubicacion(ubicacion[1])] = ubicacion[0]
                         if espacios:
-                            ubicaciones.setdefault(seccion[1].strip().upper(), espacios[0][0])
+                            ubicaciones.setdefault(clave_ubicacion(seccion[1]), espacios[0][0])
                     errores = []
                     importados = 0
                     for indice, fila in datos.fillna("").iterrows():
                         try:
                             codigo_ubicacion = str(fila["ubicacion"]).strip()
-                            clave_ubicacion = codigo_ubicacion.upper()
-                            if clave_ubicacion not in ubicaciones:
+                            codigo_normalizado = clave_ubicacion(codigo_ubicacion)
+                            if codigo_normalizado not in ubicaciones:
                                 raise ValueError(f"ubicacion desconocida: {codigo_ubicacion}")
                             registrar_movimiento(
                                 str(fila.get("tipo_movimiento", "entrada") or "entrada"),
-                                ubicaciones[clave_ubicacion],
+                                ubicaciones[codigo_normalizado],
                                 str(fila["material"]),
                                 str(fila.get("codigo_material", "")),
                                 int(float(fila["palets"] or 0)),
