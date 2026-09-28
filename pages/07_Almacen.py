@@ -339,7 +339,8 @@ with pestanas[3]:
             else:
                 st.dataframe(datos, use_container_width=True, hide_index=True)
                 if st.button("Importar movimientos", type="primary"):
-                    ubicaciones = mapa_importacion_ubicaciones(secciones)
+                    ubicaciones = mapa_importacion_ubicaciones(listar_secciones())
+                    ejemplos_ubicaciones = ", ".join(sorted(ubicaciones)[:8])
                     errores = []
                     importados = 0
                     for indice, fila in datos.fillna("").iterrows():
@@ -347,7 +348,10 @@ with pestanas[3]:
                             codigo_ubicacion = str(fila["ubicacion"]).strip()
                             codigo_normalizado = clave_ubicacion(codigo_ubicacion)
                             if codigo_normalizado not in ubicaciones:
-                                raise ValueError(f"ubicacion desconocida: {codigo_ubicacion}")
+                                raise ValueError(
+                                    f"ubicacion desconocida: {codigo_ubicacion}. "
+                                    f"Ejemplos disponibles: {ejemplos_ubicaciones}"
+                                )
                             registrar_movimiento(
                                 str(fila.get("tipo_movimiento", "entrada") or "entrada"),
                                 ubicaciones[codigo_normalizado],
