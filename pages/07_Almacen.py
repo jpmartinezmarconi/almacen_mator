@@ -40,6 +40,21 @@ def clave_ubicacion(valor):
     return re.sub(r"[^A-Z0-9]", "", str(valor).strip().upper())
 
 
+def mapa_importacion_ubicaciones(secciones):
+    ubicaciones = {}
+    for seccion in secciones:
+        espacios = listar_ubicaciones(seccion[0])
+        for ubicacion in espacios:
+            ubicaciones[clave_ubicacion(ubicacion[1])] = ubicacion[0]
+        if espacios:
+            aliases = [seccion[1]]
+            if seccion[2]:
+                aliases.append(f"{seccion[2]} {seccion[1]}")
+            for alias in aliases:
+                ubicaciones.setdefault(clave_ubicacion(alias), espacios[0][0])
+    return ubicaciones
+
+
 capacidad_total, palets_ocupados = resumen_almacen()
 porcentaje = (palets_ocupados / capacidad_total * 100) if capacidad_total else 0
 metricas = st.columns(4)
@@ -324,13 +339,7 @@ with pestanas[3]:
             else:
                 st.dataframe(datos, use_container_width=True, hide_index=True)
                 if st.button("Importar movimientos", type="primary"):
-                    ubicaciones = {}
-                    for seccion in secciones:
-                        espacios = listar_ubicaciones(seccion[0])
-                        for ubicacion in espacios:
-                            ubicaciones[clave_ubicacion(ubicacion[1])] = ubicacion[0]
-                        if espacios:
-                            ubicaciones.setdefault(clave_ubicacion(seccion[1]), espacios[0][0])
+                    ubicaciones = mapa_importacion_ubicaciones(secciones)
                     errores = []
                     importados = 0
                     for indice, fila in datos.fillna("").iterrows():
