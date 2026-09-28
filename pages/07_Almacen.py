@@ -322,18 +322,22 @@ with pestanas[3]:
                 if st.button("Importar movimientos", type="primary"):
                     ubicaciones = {}
                     for seccion in secciones:
-                        for ubicacion in listar_ubicaciones(seccion[0]):
-                            ubicaciones[ubicacion[1]] = ubicacion[0]
+                        espacios = listar_ubicaciones(seccion[0])
+                        for ubicacion in espacios:
+                            ubicaciones[ubicacion[1].strip().upper()] = ubicacion[0]
+                        if espacios:
+                            ubicaciones.setdefault(seccion[1].strip().upper(), espacios[0][0])
                     errores = []
                     importados = 0
                     for indice, fila in datos.fillna("").iterrows():
                         try:
                             codigo_ubicacion = str(fila["ubicacion"]).strip()
-                            if codigo_ubicacion not in ubicaciones:
+                            clave_ubicacion = codigo_ubicacion.upper()
+                            if clave_ubicacion not in ubicaciones:
                                 raise ValueError(f"ubicacion desconocida: {codigo_ubicacion}")
                             registrar_movimiento(
                                 str(fila.get("tipo_movimiento", "entrada") or "entrada"),
-                                ubicaciones[codigo_ubicacion],
+                                ubicaciones[clave_ubicacion],
                                 str(fila["material"]),
                                 str(fila.get("codigo_material", "")),
                                 int(float(fila["palets"] or 0)),
