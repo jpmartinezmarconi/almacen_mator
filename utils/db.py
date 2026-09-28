@@ -6,6 +6,20 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "albaranes.db")
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
+DEFAULT_ALMACEN_SECCIONES = (
+    [f"S{i}" for i in range(1, 31)]
+    + [f"ELE{i}" for i in range(1, 4)]
+    + [f"Z{i}" for i in range(1, 12)]
+    + [f"STOCK{i}" for i in range(1, 7)]
+    + [f"ESTA{i}" for i in range(1, 5)]
+    + [f"ESTB{i}" for i in range(1, 5)]
+    + [f"SP{fila}{letra}" for fila in range(1, 5) for letra in "ABCD"]
+    + [
+        "A1", "A2", "B1", "B2", "B3", "C1", "C2", "C3",
+        "D1", "D2", "D3", "E1", "E2", "E3", "F1", "F2", "F3",
+        "G2", "G3", "H2", "H3", "I2", "I3", "J2", "J3", "K2", "K3",
+    ]
+)
 
 class PostgresCursor:
     def __init__(self, cursor):
@@ -47,7 +61,40 @@ class PostgresConnection:
     def close(self):
         self._connection.close()
 
+def _seed_almacen_secciones(connection):
+    for nombre in DEFAULT_ALMACEN_SECCIONES:
+        descripcion = 'Estanterias "Huecos"' if nombre in {
+            "A1", "A2", "B1", "B2", "B3", "C1", "C2", "C3",
+            "D1", "D2", "D3", "E1", "E2", "E3", "F1", "F2", "F3",
+            "G2", "G3", "H2", "H3", "I2", "I3", "J2", "J3", "K2", "K3",
+        } else ""
+        existente = connection.execute(
+            "SELECT id FROM almacen_secciones WHERE nombre=?", (nombre,)
+        ).fetchone()
+        if existente:
+            seccion_id = existente[0]
+        else:
+            connection.execute(
+                "INSERT INTO almacen_secciones "
+                "(nombre, descripcion, filas, columnas, alto_m, ancho_m, fondo_m, capacidad_palets) "
+                "VALUES (?, ?, 1, 1, 2.5, 1.2, 1.2, 1)",
+                (nombre, descripcion),
+            )
+            seccion_id = connection.execute(
+                "SELECT id FROM almacen_secciones WHERE nombre=?", (nombre,)
+            ).fetchone()[0]
 
+        codigo = f"{nombre}-R01-C01"
+        ubicacion = connection.execute(
+            "SELECT id FROM almacen_ubicaciones WHERE codigo=?", (codigo,)
+        ).fetchone()
+        if not ubicacion:
+            connection.execute(
+                "INSERT INTO almacen_ubicaciones "
+                "(seccion_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m) "
+                "VALUES (?, ?, 1, 1, 1, 2.5, 1.2, 1.2)",
+                (seccion_id, codigo),
+            )
 def _postgres_columns(connection, table):
     cursor = connection.cursor()
     cursor.execute(
@@ -123,6 +170,7 @@ def _init_postgres(connection):
         cursor.execute("ALTER TABLE albaranes ADD COLUMN numero_serie TEXT")
     if "presupuesto_estado" not in _postgres_columns(connection, "reparaciones"):
         cursor.execute("ALTER TABLE reparaciones ADD COLUMN presupuesto_estado TEXT DEFAULT 'pendiente'")
+    _seed_almacen_secciones(connection)
     connection.commit()
 
 
@@ -190,6 +238,7 @@ def _init_sqlite(connection):
     columns = {row[1] for row in cur.execute("PRAGMA table_info(reparaciones)").fetchall()}
     if "presupuesto_estado" not in columns:
         cur.execute("ALTER TABLE reparaciones ADD COLUMN presupuesto_estado TEXT DEFAULT 'pendiente'")
+    _seed_almacen_secciones(connection)
     connection.commit()
 
 

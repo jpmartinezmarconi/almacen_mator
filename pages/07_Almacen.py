@@ -111,6 +111,10 @@ def resumen_por_seccion():
         ubicaciones = listar_ubicaciones(seccion[0])
         capacidad = sum(int(ubicacion[4]) for ubicacion in ubicaciones)
         ocupados = sum(int(ubicacion[9]) for ubicacion in ubicaciones)
+        area_por_espacio = float(seccion[6]) * float(seccion[7])
+        espacios_ocupados = sum(1 for ubicacion in ubicaciones if int(ubicacion[9]) > 0)
+        area_restante = max(len(ubicaciones) - espacios_ocupados, 0) * area_por_espacio
+        porcentaje_ocupado = round(ocupados / capacidad * 100, 1) if capacidad else 0
         filas.append(
             {
                 "Seccion": seccion[1],
@@ -118,7 +122,9 @@ def resumen_por_seccion():
                 "Capacidad (palets)": capacidad,
                 "Ocupados (palets)": ocupados,
                 "Libres (palets)": max(capacidad - ocupados, 0),
-                "Ocupacion (%)": round(ocupados / capacidad * 100, 1) if capacidad else 0,
+                "Area restante (m2)": round(area_restante, 2),
+                "Porcentaje ocupado (%)": porcentaje_ocupado,
+                "Ocupacion (%)": porcentaje_ocupado,
             }
         )
     return pd.DataFrame(filas)
