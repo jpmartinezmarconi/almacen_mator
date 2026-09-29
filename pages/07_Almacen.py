@@ -40,10 +40,10 @@ def clave_ubicacion(valor):
     return re.sub(r"[^A-Z0-9]", "", str(valor).strip().upper())
 
 
-def mapa_importacion_ubicaciones(secciones):
+def mapa_importacion_ubicaciones(secciones, ubicaciones_por_seccion):
     ubicaciones = {}
     for seccion in secciones:
-        espacios = listar_ubicaciones(seccion[0])
+        espacios = ubicaciones_por_seccion.get(seccion[0], [])
         for ubicacion in espacios:
             ubicaciones[clave_ubicacion(ubicacion[1])] = ubicacion[0]
         if espacios:
@@ -65,6 +65,10 @@ metricas[3].metric("Ocupacion", f"{porcentaje:.1f}%")
 st.progress(min(porcentaje / 100, 1.0), text=f"Ocupacion global: {porcentaje:.1f}%")
 
 secciones = listar_secciones()
+ubicaciones_por_seccion = {
+    seccion[0]: listar_ubicaciones(seccion[0])
+    for seccion in secciones
+}
 
 
 def mapa_seccion():
@@ -75,7 +79,7 @@ def mapa_seccion():
     nombres = {fila[1]: fila for fila in secciones}
     nombre_seccion = st.selectbox("Seccion del mapa", list(nombres), key="seccion_mapa")
     seccion = nombres[nombre_seccion]
-    ubicaciones = listar_ubicaciones(seccion[0])
+    ubicaciones = ubicaciones_por_seccion.get(seccion[0], [])
     por_posicion = {(fila[2], fila[3]): fila for fila in ubicaciones}
     st.caption(
         f"{seccion[2] or 'Sin descripcion'} | {seccion[3]} filas x {seccion[4]} columnas | "
@@ -127,7 +131,7 @@ def mapa_seccion():
 def resumen_por_seccion():
     filas = []
     for seccion in secciones:
-        ubicaciones = listar_ubicaciones(seccion[0])
+        ubicaciones = ubicaciones_por_seccion.get(seccion[0], [])
         capacidad = sum(int(ubicacion[4]) for ubicacion in ubicaciones)
         ocupados = sum(int(ubicacion[9]) for ubicacion in ubicaciones)
         area_por_espacio = float(seccion[6]) * float(seccion[7])
@@ -167,7 +171,7 @@ with pestanas[1]:
     else:
         ubicaciones_totales = []
         for seccion in secciones:
-            for ubicacion in listar_ubicaciones(seccion[0]):
+            for ubicacion in ubicaciones_por_seccion.get(seccion[0], []):
                 ubicaciones_totales.append((ubicacion[1], ubicacion[0], seccion[1]))
         ubicaciones_totales.sort()
         ubicacion_labels = [f"{codigo} ({seccion})" for codigo, _id, seccion in ubicaciones_totales]
@@ -339,7 +343,15 @@ with pestanas[3]:
             else:
                 st.dataframe(datos, use_container_width=True, hide_index=True)
                 if st.button("Importar movimientos", type="primary"):
-                    ubicaciones = mapa_importacion_ubicaciones(listar_secciones())
+                    secciones_actualizadas = listar_secciones()
+                    ubicaciones_actualizadas = {
+                        seccion[0]: listar_ubicaciones(seccion[0])
+                        for seccion in secciones_actualizadas
+                    }
+                    ubicaciones = mapa_importacion_ubicaciones(
+                        secciones_actualizadas,
+                        ubicaciones_actualizadas,
+                    )
                     ejemplos_ubicaciones = ", ".join(sorted(ubicaciones)[:8])
                     errores = []
                     importados = 0
