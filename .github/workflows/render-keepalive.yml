@@ -1,0 +1,17 @@
+name: Keep Render awake
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render health endpoint
+        env:
+          RENDER_APP_URL: ${{ secrets.RENDER_APP_URL }}
+        run: |
+          test -n "$RENDER_APP_URL"
+          curl --fail --silent --show-error --max-time 30 "$RENDER_APP_URL/?keepalive=1"
