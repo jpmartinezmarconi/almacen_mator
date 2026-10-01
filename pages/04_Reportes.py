@@ -2,9 +2,16 @@ import pandas as pd
 import streamlit as st
 
 from utils.branding import mostrar_logo
-from utils.db import get_conn
+from utils.albaranes import (
+    finalizar_albaranes_vencidos,
+    iniciar_finalizador_automatico,
+)
+from utils.db import get_conn, init_db
 
 mostrar_logo()
+init_db()
+finalizar_albaranes_vencidos()
+iniciar_finalizador_automatico()
 st.title("Reportes - Albaranes finalizados")
 
 conn = get_conn()
@@ -62,7 +69,10 @@ if not registros:
 
 df = pd.DataFrame(registros, columns=columnas)
 
-st.caption(f"Total de albaranes visibles: {len(df)}. El historial se conserva aunque cambie su estado.")
+st.caption(
+    f"Total de albaranes visibles: {len(df)}. "
+    "Los que llevan 24 horas en Procesando se finalizan automáticamente."
+)
 st.dataframe(df, use_container_width=True, hide_index=True)
 
 

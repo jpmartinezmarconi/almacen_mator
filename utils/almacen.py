@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from utils.db import get_conn
 
@@ -912,8 +912,15 @@ def procesar_albaran(albaran_id, observaciones, foto_preparacion, numero_serie):
 
         actualizacion_albaran = conn.execute(
             "UPDATE albaranes SET estado='procesando', observaciones=?, "
-            "foto_preparacion=?, numero_serie=? WHERE id=? AND estado='entrada'",
-            (observaciones_finales, foto_preparacion, numero_serie, albaran_id),
+            "foto_preparacion=?, numero_serie=?, procesado_en=? "
+            "WHERE id=? AND estado='entrada'",
+            (
+                observaciones_finales,
+                foto_preparacion,
+                numero_serie,
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                albaran_id,
+            ),
         )
         if actualizacion_albaran.rowcount != 1:
             raise ValueError("El albaran ya no esta pendiente de procesar.")

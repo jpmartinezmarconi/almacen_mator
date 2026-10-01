@@ -20,7 +20,11 @@ del material como referencia. Las existencias se descuentan al marcar el
 albaran como Procesando, no al crearlo. El descuento solo se aplica a las lineas
 con stock suficiente; las lineas insuficientes se dejan intactas y se indican
 en las observaciones. En Procesando se pueden consultar las ubicaciones de las
-que se descontaron las unidades.
+que se descontaron las unidades. Al cumplir 24 horas en Procesando, los
+albaranes se marcan automaticamente como finalizados y sus lineas se guardan en
+el historial de finalizados que alimenta los reportes. Los albaranes que ya
+estaban en Procesando al desplegar esta mejora empiezan su primer conteo de
+24 horas desde la migracion, porque no existia una fecha de procesamiento previa.
 
 ## Despliegue en Render
 

@@ -10,9 +10,16 @@ from utils.almacen import (
     procesar_albaran,
 )
 from utils.branding import mostrar_logo
-from utils.db import get_conn
+from utils.albaranes import (
+    finalizar_albaranes_vencidos,
+    iniciar_finalizador_automatico,
+)
+from utils.db import get_conn, init_db
 
 mostrar_logo()
+init_db()
+finalizar_albaranes_vencidos()
+iniciar_finalizador_automatico()
 st.title("Procesando Albaranes")
 
 password = st.text_input("Contraseña", type="password")
@@ -54,6 +61,7 @@ for albaran in pendientes:
         fecha,
         foto_preparacion,
         numero_serie,
+        _,
     ) = albaran
 
     with st.expander(f"Albarán #{id_} - {nombre}"):
@@ -166,6 +174,7 @@ for albaran in en_proceso:
         fecha,
         foto_preparacion,
         numero_serie,
+        _,
     ) = albaran
     with st.expander(f"Albarán #{id_} - {nombre}"):
         st.write(f"Empresa: {empresa}")

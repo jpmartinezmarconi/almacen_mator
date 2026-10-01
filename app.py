@@ -1,11 +1,17 @@
 import streamlit as st
 from utils.branding import mostrar_logo
+from utils.albaranes import (
+    finalizar_albaranes_vencidos,
+    iniciar_finalizador_automatico,
+)
 from utils.db import init_db
 
 init_db()
+finalizar_albaranes_vencidos()
 
 st.set_page_config(page_title="Almacén Mator", layout="wide")
 mostrar_logo()
+iniciar_finalizador_automatico()
 
 st.markdown("""
     <h1 style='text-align: center; color: black; font-family: Arial;'>
