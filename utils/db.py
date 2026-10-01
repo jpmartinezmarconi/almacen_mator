@@ -61,6 +61,9 @@ class PostgresConnection:
     def commit(self):
         self._connection.commit()
 
+    def rollback(self):
+        self._connection.rollback()
+
     def close(self):
         self._connection.close()
 
