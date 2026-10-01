@@ -166,21 +166,57 @@ def guardar_seccion(
             pass
 
 
-def eliminar_seccion(seccion_id):
+def desactivar_secciones(seccion_ids):
+    seccion_ids = tuple(dict.fromkeys(seccion_ids))
+    if not seccion_ids:
+        raise ValueError("Selecciona al menos una seccion.")
+
+    placeholders = ", ".join("?" for _ in seccion_ids)
     conn = get_conn()
     try:
-        ocupacion = conn.execute(
-            "SELECT COALESCE(SUM(palets), 0) + COALESCE(SUM(unidades_sueltas), 0) FROM almacen_stock s "
-            "JOIN almacen_ubicaciones u ON u.id = s.ubicacion_id WHERE u.seccion_id = ?",
-            (seccion_id,),
-        ).fetchone()[0]
-        if ocupacion:
-            raise ValueError("No se puede eliminar una seccion con palets almacenados.")
-        conn.execute("UPDATE almacen_secciones SET activa=0 WHERE id=?", (seccion_id,))
-        conn.execute("UPDATE almacen_ubicaciones SET activa=0 WHERE seccion_id=?", (seccion_id,))
+        filas = conn.execute(
+            "SELECT sec.id, sec.nombre, sec.activa, "
+            "COALESCE(SUM(stock.palets), 0), COALESCE(SUM(stock.unidades_sueltas), 0) "
+            "FROM almacen_secciones sec "
+            "LEFT JOIN almacen_ubicaciones u ON u.seccion_id = sec.id "
+            "LEFT JOIN almacen_stock stock ON stock.ubicacion_id = u.id "
+            f"WHERE sec.id IN ({placeholders}) GROUP BY sec.id",
+            seccion_ids,
+        ).fetchall()
+        ids_encontrados = {fila[0] for fila in filas}
+        if ids_encontrados != set(seccion_ids):
+            raise ValueError("No se encontraron todas las secciones seleccionadas.")
+
+        con_stock = [fila[1] for fila in filas if fila[3] or fila[4]]
+        if con_stock:
+            raise ValueError(
+                "No se pueden desactivar secciones con stock: " + ", ".join(con_stock)
+            )
+
+        ids_activas = [fila[0] for fila in filas if fila[2]]
+        if not ids_activas:
+            raise ValueError("Las secciones seleccionadas ya estan desactivadas.")
+
+        activos_placeholders = ", ".join("?" for _ in ids_activas)
+        conn.execute(
+            f"UPDATE almacen_secciones SET activa=0 WHERE id IN ({activos_placeholders})",
+            tuple(ids_activas),
+        )
+        conn.execute(
+            f"UPDATE almacen_ubicaciones SET activa=0 WHERE seccion_id IN ({activos_placeholders})",
+            tuple(ids_activas),
+        )
         conn.commit()
+        return len(ids_activas)
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
+
+
+def eliminar_seccion(seccion_id):
+    desactivar_secciones([seccion_id])
 
 
 def registrar_movimiento(

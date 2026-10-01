@@ -7,7 +7,7 @@ import streamlit as st
 
 from utils.almacen import (
     demanda_albaranes,
-    eliminar_seccion,
+    desactivar_secciones,
     guardar_seccion,
     listar_secciones,
     listar_ubicaciones_por_secciones,
@@ -273,13 +273,25 @@ with pestanas[2]:
             st.error(str(error))
         except Exception as error:
             st.error(f"No se pudo guardar la seccion: {error}")
-    if seleccionada and st.button("Desactivar seccion", type="secondary"):
-        try:
-            eliminar_seccion(seleccionada[0])
-            st.success("Seccion desactivada.")
-            st.rerun()
-        except ValueError as error:
-            st.error(str(error))
+    with st.form("formulario_desactivar_secciones"):
+        secciones_a_desactivar = st.multiselect(
+            "Secciones a desactivar",
+            options=[seccion[0] for seccion in secciones],
+            format_func=lambda seccion_id: next(
+                seccion[1] for seccion in secciones if seccion[0] == seccion_id
+            ),
+        )
+        desactivar = st.form_submit_button("Desactivar secciones", type="secondary")
+    if desactivar:
+        if not secciones_a_desactivar:
+            st.error("Selecciona al menos una seccion.")
+        else:
+            try:
+                cantidad = desactivar_secciones(secciones_a_desactivar)
+                st.success(f"Se desactivaron {cantidad} secciones. El historial se conserva.")
+                st.rerun()
+            except ValueError as error:
+                st.error(str(error))
 
 with pestanas[3]:
     st.subheader("Importar movimientos desde Excel o CSV")
