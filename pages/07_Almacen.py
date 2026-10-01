@@ -9,12 +9,15 @@ from utils.almacen import (
     demanda_albaranes,
     desactivar_secciones,
     guardar_seccion,
+    listar_almacenes,
     listar_secciones,
+    listar_stock_ubicaciones,
     listar_ubicaciones_por_secciones,
     obtener_detalle_ubicacion,
     obtener_movimientos,
     registrar_movimiento,
     resumen_almacen,
+    transferir_material,
 )
 from utils.branding import mostrar_logo
 from utils.db import init_db
@@ -26,6 +29,16 @@ init_db()
 
 st.title("Almacen Virtual")
 st.caption("Controla capacidad, ubicaciones, palets, unidades y pedidos desde un unico lugar.")
+
+almacenes = listar_almacenes()
+almacen_id = st.selectbox(
+    "Almacen",
+    options=[fila[0] for fila in almacenes],
+    format_func=lambda seleccionado: next(
+        fila[1] for fila in almacenes if fila[0] == seleccionado
+    ),
+    key="almacen_seleccionado",
+)
 
 
 def formato_numero(valor):
@@ -55,7 +68,7 @@ def mapa_importacion_ubicaciones(secciones, ubicaciones_por_seccion):
     return ubicaciones
 
 
-capacidad_total, palets_ocupados = resumen_almacen()
+capacidad_total, palets_ocupados = resumen_almacen(almacen_id)
 porcentaje = (palets_ocupados / capacidad_total * 100) if capacidad_total else 0
 metricas = st.columns(4)
 metricas[0].metric("Capacidad total", f"{formato_numero(capacidad_total)} palets")
@@ -64,7 +77,7 @@ metricas[2].metric("Espacio libre", formato_numero(max(capacidad_total - palets_
 metricas[3].metric("Ocupacion", f"{porcentaje:.1f}%")
 st.progress(min(porcentaje / 100, 1.0), text=f"Ocupacion global: {porcentaje:.1f}%")
 
-secciones = listar_secciones()
+secciones = listar_secciones(almacen_id)
 ubicaciones_por_seccion = listar_ubicaciones_por_secciones(
     seccion[0] for seccion in secciones
 )
@@ -152,7 +165,16 @@ def resumen_por_seccion():
     return pd.DataFrame(filas)
 
 
-pestanas = st.tabs(["Mapa y ocupacion", "Movimientos", "Configuracion", "Importar Excel", "Pedidos"])
+pestanas = st.tabs(
+    [
+        "Mapa y ocupacion",
+        "Movimientos",
+        "Configuracion",
+        "Importar Excel",
+        "Pedidos",
+        "Traslados entre naves",
+    ]
+)
 
 with pestanas[0]:
     mapa_seccion()
@@ -222,7 +244,7 @@ with pestanas[1]:
             except ValueError as error:
                 st.error(str(error))
 
-        movimientos = obtener_movimientos()
+        movimientos = obtener_movimientos(almacen_id)
         if movimientos:
             st.subheader("Ultimos movimientos")
             st.dataframe(
@@ -266,6 +288,7 @@ with pestanas[2]:
                 float(fondo_m),
                 int(capacidad_palets),
                 valores[0],
+                almacen_id,
             )
             st.success("Seccion guardada. Los espacios ya estan disponibles en el mapa.")
             st.rerun()
@@ -288,7 +311,7 @@ with pestanas[2]:
         else:
             try:
                 cantidad = desactivar_secciones(secciones_a_desactivar)
-                st.success(f"Se desactivaron {cantidad} secciones. El historial se conserva.")
+                st.success(f"Se desactivaron {cantidad} secciones de esta nave. El historial se conserva.")
                 st.rerun()
             except ValueError as error:
                 st.error(str(error))
@@ -354,7 +377,7 @@ with pestanas[3]:
             else:
                 st.dataframe(datos, use_container_width=True, hide_index=True)
                 if st.button("Importar movimientos", type="primary"):
-                    secciones_actualizadas = listar_secciones()
+                    secciones_actualizadas = listar_secciones(almacen_id)
                     ubicaciones_actualizadas = listar_ubicaciones_por_secciones(
                         seccion[0] for seccion in secciones_actualizadas
                     )
@@ -407,3 +430,85 @@ with pestanas[4]:
         agrupada = agrupada.rename(columns={"unidades": "Unidades pedidas"}).sort_values("Unidades pedidas", ascending=False)
         st.subheader("Unidades pedidas por material")
         st.bar_chart(agrupada.set_index("material"))
+
+with pestanas[5]:
+    st.caption(
+        "El almacen seleccionado arriba sera el origen; elige la otra nave como destino."
+    )
+    otros_almacenes = [fila for fila in almacenes if fila[0] != almacen_id]
+    stock_origen = listar_stock_ubicaciones(almacen_id)
+    if not otros_almacenes:
+        st.info("No hay otra nave disponible para recibir el traslado.")
+    elif not stock_origen:
+        st.info("Esta nave no tiene existencias que se puedan trasladar.")
+    else:
+        destino_almacen_id = st.selectbox(
+            "Trasladar a",
+            options=[fila[0] for fila in otros_almacenes],
+            format_func=lambda seleccionado: next(
+                fila[1] for fila in otros_almacenes if fila[0] == seleccionado
+            ),
+            key="almacen_destino_traslado",
+        )
+        indice_stock = st.selectbox(
+            "Material y ubicacion de origen",
+            options=range(len(stock_origen)),
+            format_func=lambda indice: (
+                f"{stock_origen[indice][3]}"
+                f"{' (' + stock_origen[indice][4] + ')' if stock_origen[indice][4] else ''}"
+                f" | {stock_origen[indice][2]} / {stock_origen[indice][1]}"
+                f" | {stock_origen[indice][5]} palets + {stock_origen[indice][7]} sueltas"
+            ),
+        )
+        material_origen = stock_origen[indice_stock]
+        secciones_destino = listar_secciones(destino_almacen_id)
+        ubicaciones_destino_por_seccion = listar_ubicaciones_por_secciones(
+            seccion[0] for seccion in secciones_destino
+        )
+        ubicaciones_destino = [
+            (ubicacion[0], ubicacion[1], seccion[1])
+            for seccion in secciones_destino
+            for ubicacion in ubicaciones_destino_por_seccion.get(seccion[0], [])
+        ]
+        if not ubicaciones_destino:
+            st.info("Configura secciones y ubicaciones en la nave de destino antes de trasladar.")
+        else:
+            ubicacion_destino_id = st.selectbox(
+                "Ubicacion de destino",
+                options=[ubicacion[0] for ubicacion in ubicaciones_destino],
+                format_func=lambda seleccionado: next(
+                    f"{ubicacion[1]} ({ubicacion[2]})"
+                    for ubicacion in ubicaciones_destino
+                    if ubicacion[0] == seleccionado
+                ),
+            )
+            st.caption(
+                f"Disponible en origen: {material_origen[5]} palets de "
+                f"{material_origen[6]} unidades y {material_origen[7]} unidades sueltas."
+            )
+            with st.form("formulario_traslado", clear_on_submit=True):
+                palets_trasladar = st.number_input(
+                    "Palets a trasladar", min_value=0, step=1, value=0
+                )
+                unidades_sueltas_trasladar = st.number_input(
+                    "Unidades sueltas a trasladar", min_value=0, step=1, value=0
+                )
+                referencia_traslado = st.text_input("Referencia o nota del traslado")
+                confirmar_traslado = st.form_submit_button(
+                    "Trasladar material", type="primary"
+                )
+            if confirmar_traslado:
+                try:
+                    transferir_material(
+                        material_origen[0],
+                        ubicacion_destino_id,
+                        material_origen[3],
+                        material_origen[4],
+                        palets_trasladar,
+                        unidades_sueltas_trasladar,
+                        referencia_traslado,
+                    )
+                    st.success("Traslado registrado y existencias actualizadas en ambas naves.")
+                    st.rerun()
+                except ValueError as error:
+                    st.error(str(error))

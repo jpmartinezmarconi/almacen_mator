@@ -11,13 +11,23 @@ def ahora():
     return datetime.now().strftime(DATE_FORMAT)
 
 
-def listar_secciones(incluir_inactivas=False):
+def listar_almacenes():
     conn = get_conn()
     try:
-        filtro = "" if incluir_inactivas else " WHERE activa = 1"
+        return conn.execute("SELECT id, nombre FROM almacenes ORDER BY id").fetchall()
+    finally:
+        conn.close()
+
+
+def listar_secciones(almacen_id=1, incluir_inactivas=False):
+    conn = get_conn()
+    try:
+        filtro = "" if incluir_inactivas else " AND activa = 1"
         return conn.execute(
             "SELECT id, nombre, descripcion, filas, columnas, alto_m, ancho_m, fondo_m, "
-            f"capacidad_palets, activa FROM almacen_secciones{filtro} ORDER BY nombre"
+            "capacidad_palets, activa FROM almacen_secciones "
+            "WHERE almacen_id = ?" + filtro + " ORDER BY nombre",
+            (almacen_id,),
         ).fetchall()
     finally:
         conn.close()
@@ -78,6 +88,23 @@ def obtener_detalle_ubicacion(ubicacion_id):
         conn.close()
 
 
+def listar_stock_ubicaciones(almacen_id):
+    conn = get_conn()
+    try:
+        return conn.execute(
+            "SELECT u.id, u.codigo, sec.nombre, s.material, s.codigo_material, s.palets, "
+            "s.unidades_por_palet, s.unidades_sueltas "
+            "FROM almacen_stock s "
+            "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "WHERE sec.almacen_id=? AND sec.activa=1 AND u.activa=1 "
+            "ORDER BY sec.nombre, u.codigo, s.material",
+            (almacen_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+
 def guardar_seccion(
     nombre,
     descripcion,
@@ -88,6 +115,7 @@ def guardar_seccion(
     fondo_m,
     capacidad_palets,
     seccion_id=None,
+    almacen_id=1,
 ):
     nombre = nombre.strip()
     if not nombre:
@@ -101,6 +129,12 @@ def guardar_seccion(
     try:
         prefijo_existente = None
         if seccion_id:
+            pertenece_a_nave = conn.execute(
+                "SELECT 1 FROM almacen_secciones WHERE id=? AND almacen_id=?",
+                (seccion_id, almacen_id),
+            ).fetchone()
+            if not pertenece_a_nave:
+                raise ValueError("La seccion seleccionada no pertenece a esta nave.")
             codigo_existente = conn.execute(
                 "SELECT codigo FROM almacen_ubicaciones WHERE seccion_id=? ORDER BY id LIMIT 1",
                 (seccion_id,),
@@ -126,12 +160,13 @@ def guardar_seccion(
         else:
             conn.execute(
                 "INSERT INTO almacen_secciones "
-                "(nombre, descripcion, filas, columnas, alto_m, ancho_m, fondo_m, capacidad_palets) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (nombre, descripcion.strip(), filas, columnas, alto_m, ancho_m, fondo_m, capacidad_palets),
+                "(almacen_id, nombre, descripcion, filas, columnas, alto_m, ancho_m, fondo_m, capacidad_palets) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (almacen_id, nombre, descripcion.strip(), filas, columnas, alto_m, ancho_m, fondo_m, capacidad_palets),
             )
             seccion_id = conn.execute(
-                "SELECT id FROM almacen_secciones WHERE nombre = ?", (nombre,)
+                "SELECT id FROM almacen_secciones WHERE almacen_id=? AND nombre = ?",
+                (almacen_id, nombre),
             ).fetchone()[0]
 
         prefijo = prefijo_existente or re.sub(r"[^A-Za-z0-9]+", "-", nombre).strip("-").upper() or "SEC"
@@ -139,7 +174,8 @@ def guardar_seccion(
             for columna in range(1, columnas + 1):
                 codigo = f"{prefijo}-R{fila:02d}-C{columna:02d}"
                 existente = conn.execute(
-                    "SELECT id FROM almacen_ubicaciones WHERE codigo = ?", (codigo,)
+                    "SELECT id FROM almacen_ubicaciones WHERE seccion_id=? AND codigo = ?",
+                    (seccion_id, codigo),
                 ).fetchone()
                 if existente:
                     conn.execute(
@@ -150,9 +186,9 @@ def guardar_seccion(
                 else:
                     conn.execute(
                         "INSERT INTO almacen_ubicaciones "
-                        "(seccion_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (seccion_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m),
+                        "(seccion_id, almacen_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (seccion_id, almacen_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m),
                     )
         conn.commit()
         return seccion_id
@@ -320,27 +356,184 @@ def registrar_movimiento(
         conn.close()
 
 
-def obtener_movimientos(limite=100):
+def transferir_material(
+    ubicacion_origen_id,
+    ubicacion_destino_id,
+    material,
+    codigo_material,
+    palets,
+    unidades_sueltas,
+    referencia="",
+):
+    material = material.strip()
+    codigo_material = codigo_material.strip()
+    palets = int(palets)
+    unidades_sueltas = int(unidades_sueltas)
+    if ubicacion_origen_id == ubicacion_destino_id:
+        raise ValueError("El origen y el destino deben ser ubicaciones distintas.")
+    if not material:
+        raise ValueError("El material es obligatorio.")
+    if palets < 0 or unidades_sueltas < 0 or (palets == 0 and unidades_sueltas == 0):
+        raise ValueError("Indica una cantidad valida para trasladar.")
+
+    conn = get_conn()
+    try:
+        ubicaciones = conn.execute(
+            "SELECT u.id, u.codigo, u.capacidad_palets, sec.almacen_id, a.nombre "
+            "FROM almacen_ubicaciones u "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "JOIN almacenes a ON a.id=sec.almacen_id "
+            "WHERE u.id IN (?, ?) AND u.activa=1 AND sec.activa=1",
+            (ubicacion_origen_id, ubicacion_destino_id),
+        ).fetchall()
+        por_id = {fila[0]: fila for fila in ubicaciones}
+        origen = por_id.get(ubicacion_origen_id)
+        destino = por_id.get(ubicacion_destino_id)
+        if not origen or not destino:
+            raise ValueError("El origen o el destino no estan activos.")
+        if origen[3] == destino[3]:
+            raise ValueError("El traslado debe ser entre naves distintas.")
+
+        stock_origen = conn.execute(
+            "SELECT id, palets, unidades_por_palet, unidades_sueltas "
+            "FROM almacen_stock WHERE ubicacion_id=? AND material=? AND codigo_material=?",
+            (ubicacion_origen_id, material, codigo_material),
+        ).fetchone()
+        if not stock_origen:
+            raise ValueError("No hay ese material en la ubicacion de origen.")
+        upp_origen = stock_origen[2]
+        unidades_origen = stock_origen[1] * upp_origen + stock_origen[3]
+        unidades_a_trasladar = palets * upp_origen + unidades_sueltas
+        if unidades_a_trasladar <= 0 or unidades_a_trasladar > unidades_origen:
+            raise ValueError(f"Solo hay {unidades_origen} unidades disponibles de ese material.")
+
+        stock_destino = conn.execute(
+            "SELECT id, palets, unidades_por_palet, unidades_sueltas "
+            "FROM almacen_stock WHERE ubicacion_id=? AND material=? AND codigo_material=?",
+            (ubicacion_destino_id, material, codigo_material),
+        ).fetchone()
+        upp_destino = stock_destino[2] if stock_destino else upp_origen
+        unidades_destino = (
+            stock_destino[1] * upp_destino + stock_destino[3] if stock_destino else 0
+        )
+        nuevos_palets, nuevas_sueltas = divmod(
+            unidades_destino + unidades_a_trasladar, upp_destino
+        )
+        ocupacion_destino = conn.execute(
+            "SELECT COALESCE(SUM(palets), 0) FROM almacen_stock WHERE ubicacion_id=?",
+            (ubicacion_destino_id,),
+        ).fetchone()[0]
+        if ocupacion_destino - (stock_destino[1] if stock_destino else 0) + nuevos_palets > destino[2]:
+            raise ValueError(
+                f"La ubicacion destino ({destino[1]}) no tiene capacidad para "
+                "los palets trasladados."
+            )
+
+        restantes_origen = unidades_origen - unidades_a_trasladar
+        palets_restantes, sueltas_restantes = divmod(restantes_origen, upp_origen)
+        if restantes_origen:
+            conn.execute(
+                "UPDATE almacen_stock SET palets=?, unidades_sueltas=?, actualizado=? WHERE id=?",
+                (palets_restantes, sueltas_restantes, ahora(), stock_origen[0]),
+            )
+        else:
+            conn.execute("DELETE FROM almacen_stock WHERE id=?", (stock_origen[0],))
+
+        if stock_destino:
+            conn.execute(
+                "UPDATE almacen_stock SET palets=?, unidades_sueltas=?, actualizado=? WHERE id=?",
+                (nuevos_palets, nuevas_sueltas, ahora(), stock_destino[0]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO almacen_stock "
+                "(ubicacion_id, material, codigo_material, palets, unidades_por_palet, "
+                "unidades_sueltas, actualizado) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    ubicacion_destino_id,
+                    material,
+                    codigo_material,
+                    nuevos_palets,
+                    upp_destino,
+                    nuevas_sueltas,
+                    ahora(),
+                ),
+            )
+
+        fecha = ahora()
+        nota = referencia.strip()
+        conn.execute(
+            "INSERT INTO almacen_movimientos "
+            "(fecha, tipo, ubicacion_id, material, codigo_material, palets, "
+            "unidades_por_palet, unidades_sueltas, referencia) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                fecha,
+                "traslado_salida",
+                ubicacion_origen_id,
+                material,
+                codigo_material,
+                palets,
+                upp_origen,
+                unidades_sueltas,
+                f"A {destino[4]} / {destino[1]}" + (f" | {nota}" if nota else ""),
+            ),
+        )
+        conn.execute(
+            "INSERT INTO almacen_movimientos "
+            "(fecha, tipo, ubicacion_id, material, codigo_material, palets, "
+            "unidades_por_palet, unidades_sueltas, referencia) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                fecha,
+                "traslado_entrada",
+                ubicacion_destino_id,
+                material,
+                codigo_material,
+                palets,
+                upp_origen,
+                unidades_sueltas,
+                f"Desde {origen[4]} / {origen[1]}" + (f" | {nota}" if nota else ""),
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def obtener_movimientos(almacen_id=1, limite=100):
     conn = get_conn()
     try:
         return conn.execute(
-            "SELECT m.fecha, m.tipo, u.codigo, m.material, m.palets, "
+            "SELECT m.fecha, CASE m.tipo "
+            "WHEN 'traslado_salida' THEN 'Traslado enviado' "
+            "WHEN 'traslado_entrada' THEN 'Traslado recibido' ELSE m.tipo END, "
+            "u.codigo, m.material, m.palets, "
             "m.unidades_por_palet, m.unidades_sueltas, m.referencia "
             "FROM almacen_movimientos m JOIN almacen_ubicaciones u ON u.id=m.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "WHERE sec.almacen_id=? "
             "ORDER BY m.id DESC LIMIT ?",
-            (limite,),
+            (almacen_id, limite),
         ).fetchall()
     finally:
         conn.close()
 
 
-def resumen_almacen():
+def resumen_almacen(almacen_id=1):
     conn = get_conn()
     try:
         fila = conn.execute(
             "SELECT COALESCE(SUM(u.capacidad_palets), 0), COALESCE(SUM(s.palets), 0) "
-            "FROM almacen_ubicaciones u LEFT JOIN almacen_stock s ON s.ubicacion_id=u.id "
-            "WHERE u.activa=1"
+            "FROM almacen_ubicaciones u "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "LEFT JOIN (SELECT ubicacion_id, SUM(palets) AS palets "
+            "FROM almacen_stock GROUP BY ubicacion_id) s ON s.ubicacion_id=u.id "
+            "WHERE u.activa=1 AND sec.almacen_id=?",
+            (almacen_id,),
         ).fetchone()
         return int(fila[0]), int(fila[1])
     finally:

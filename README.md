@@ -2,6 +2,15 @@
 
 Aplicacion Streamlit para gestionar albaranes, equipos y el almacen virtual.
 
+## Almacen virtual
+
+El almacen virtual permite alternar entre Nave 1 y Nave 2. Los datos actuales
+de secciones, ubicaciones, existencias e historial se conservan en Nave 1; Nave 2
+empieza sin secciones para que se configure de forma independiente. En la pestaña
+Traslados se puede mover material entre ubicaciones de ambas naves. El traslado
+actualiza las dos existencias en una sola transaccion y registra su salida y
+recepcion en el historial.
+
 ## Despliegue en Render
 
 El servicio se configura con `render.yaml`. En Render, define `DATABASE_URL` como
