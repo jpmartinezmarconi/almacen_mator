@@ -24,11 +24,29 @@ from utils.branding import mostrar_logo
 from utils.db import init_db
 
 
+PASSWORDS_ALMACEN = {"ju@n", "s@r@", "j@rdi"}
+
 st.set_page_config(page_title="Almacen Virtual - Almacen Mator", layout="wide")
 mostrar_logo()
-init_db()
 
+if not st.session_state.get("almacen_virtual_autorizado"):
+    st.title("Almacen Virtual")
+    st.info("Introduce una de las claves autorizadas para acceder a esta sección.")
+    password = st.text_input("Contraseña", type="password")
+    if password:
+        if password in PASSWORDS_ALMACEN:
+            st.session_state.almacen_virtual_autorizado = True
+            st.rerun()
+        else:
+            st.error("Contraseña incorrecta.")
+    st.stop()
+
+init_db()
 st.title("Almacen Virtual")
+if st.button("Cerrar sesión de Almacen Virtual"):
+    st.session_state.almacen_virtual_autorizado = False
+    st.rerun()
+
 st.caption(
     "Selecciona una nave, crea secciones con su capacidad en palets y registra "
     "existencias o traslados."
