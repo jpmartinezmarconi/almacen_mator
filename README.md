@@ -1,22 +1,19 @@
----
-title: Almacen Mator
-sdk: streamlit
-sdk_version: 1.49.0
-app_file: app.py
-python_version: 3.11
-pinned: false
----
-
 # Almacen Mator
 
-Aplicacion Streamlit para gestionar albaranes, equipos y reparaciones.
+Aplicacion Streamlit para gestionar albaranes, equipos y el almacen virtual.
 
-## Keepalive de Render
+## Despliegue en Render
 
-El workflow `.github/workflows/render-keepalive.yml` consulta Render cada 5 minutos.
-Para activarlo, configura el secreto `RENDER_APP_URL` en GitHub con la URL publica
-completa del servicio, por ejemplo `https://tu-servicio.onrender.com`.
+El servicio se configura con `render.yaml`. En Render, define `DATABASE_URL` como
+la URL de una base de datos PostgreSQL para conservar los datos entre reinicios.
+Si no se configura, la aplicacion usa SQLite local, que no es persistente en el
+disco efimero de un servicio Render.
 
-## Persistencia
+Configura `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` solo si se usan las
+notificaciones de Telegram.
 
-Este Space necesita almacenamiento persistente para conservar la base SQLite, las fotos de preparacion y los archivos generados en `data/`. Sin almacenamiento persistente, esos datos pueden perderse cuando el Space se reinicia.
+## Keepalive
+
+El workflow `.github/workflows/render-keepalive.yml` consulta Render cada cinco
+minutos. Para activarlo, configura el secreto `RENDER_APP_URL` en GitHub con la
+URL publica completa del servicio, por ejemplo `https://tu-servicio.onrender.com`.

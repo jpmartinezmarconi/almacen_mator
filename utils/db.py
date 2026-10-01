@@ -1,10 +1,13 @@
 import os
 import sqlite3
+import threading
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "albaranes.db")
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+_DB_INITIALIZED = False
+_DB_INIT_LOCK = threading.Lock()
 
 DEFAULT_ALMACEN_SECCIONES = (
     [f"S{i}" for i in range(1, 31)]
@@ -66,38 +69,54 @@ def _seed_almacen_secciones(connection):
         fila[1]: fila[0]
         for fila in connection.execute("SELECT id, nombre FROM almacen_secciones").fetchall()
     }
+    huecos = {
+        "A1", "A2", "B1", "B2", "B3", "C1", "C2", "C3",
+        "D1", "D2", "D3", "E1", "E2", "E3", "F1", "F2", "F3",
+        "G2", "G3", "H2", "H3", "I2", "I3", "J2", "J3", "K2", "K3",
+    }
+    nuevas_secciones = [
+        (nombre, 'Estanterias "Huecos"' if nombre in huecos else "")
+        for nombre in DEFAULT_ALMACEN_SECCIONES
+        if nombre not in secciones_existentes
+    ]
+    if nuevas_secciones:
+        valores = ", ".join(
+            "(?, ?, 1, 1, 2.5, 1.2, 1.2, 1)" for _ in nuevas_secciones
+        )
+        parametros = tuple(valor for seccion in nuevas_secciones for valor in seccion)
+        connection.execute(
+            "INSERT INTO almacen_secciones "
+            "(nombre, descripcion, filas, columnas, alto_m, ancho_m, fondo_m, capacidad_palets) "
+            f"VALUES {valores}",
+            parametros,
+        )
+        secciones_existentes = {
+            fila[1]: fila[0]
+            for fila in connection.execute("SELECT id, nombre FROM almacen_secciones").fetchall()
+        }
+
     ubicaciones_existentes = {
         fila[0]
         for fila in connection.execute("SELECT codigo FROM almacen_ubicaciones").fetchall()
     }
-    for nombre in DEFAULT_ALMACEN_SECCIONES:
-        descripcion = 'Estanterias "Huecos"' if nombre in {
-            "A1", "A2", "B1", "B2", "B3", "C1", "C2", "C3",
-            "D1", "D2", "D3", "E1", "E2", "E3", "F1", "F2", "F3",
-            "G2", "G3", "H2", "H3", "I2", "I3", "J2", "J3", "K2", "K3",
-        } else ""
-        seccion_id = secciones_existentes.get(nombre)
-        if seccion_id is None:
-            connection.execute(
-                "INSERT INTO almacen_secciones "
-                "(nombre, descripcion, filas, columnas, alto_m, ancho_m, fondo_m, capacidad_palets) "
-                "VALUES (?, ?, 1, 1, 2.5, 1.2, 1.2, 1)",
-                (nombre, descripcion),
-            )
-            seccion_id = connection.execute(
-                "SELECT id FROM almacen_secciones WHERE nombre=?", (nombre,)
-            ).fetchone()[0]
-            secciones_existentes[nombre] = seccion_id
+    nuevas_ubicaciones = [
+        (secciones_existentes[nombre], f"{nombre}-R01-C01")
+        for nombre in DEFAULT_ALMACEN_SECCIONES
+        if f"{nombre}-R01-C01" not in ubicaciones_existentes
+    ]
+    if nuevas_ubicaciones:
+        valores = ", ".join(
+            "(?, ?, 1, 1, 1, 2.5, 1.2, 1.2)" for _ in nuevas_ubicaciones
+        )
+        parametros = tuple(valor for ubicacion in nuevas_ubicaciones for valor in ubicacion)
+        connection.execute(
+            "INSERT INTO almacen_ubicaciones "
+            "(seccion_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m) "
+            f"VALUES {valores}",
+            parametros,
+        )
 
-        codigo = f"{nombre}-R01-C01"
-        if codigo not in ubicaciones_existentes:
-            connection.execute(
-                "INSERT INTO almacen_ubicaciones "
-                "(seccion_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m) "
-                "VALUES (?, ?, 1, 1, 1, 2.5, 1.2, 1.2)",
-                (seccion_id, codigo),
-            )
-            ubicaciones_existentes.add(codigo)
+
 def _postgres_columns(connection, table):
     cursor = connection.cursor()
     cursor.execute(
@@ -226,20 +245,35 @@ def _init_sqlite(connection):
     connection.commit()
 
 
-def get_conn():
+def _connect():
     if DATABASE_URL:
         import psycopg2
 
-        connection = PostgresConnection(psycopg2.connect(DATABASE_URL))
-        _init_postgres(connection)
-        return connection
+        return PostgresConnection(psycopg2.connect(DATABASE_URL))
 
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    connection = sqlite3.connect(DB_PATH, check_same_thread=False)
-    _init_sqlite(connection)
-    return connection
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
 def init_db():
-    conn = get_conn()
-    conn.close()
+    global _DB_INITIALIZED
+
+    if _DB_INITIALIZED:
+        return
+    with _DB_INIT_LOCK:
+        if _DB_INITIALIZED:
+            return
+        conn = _connect()
+        try:
+            if DATABASE_URL:
+                _init_postgres(conn)
+            else:
+                _init_sqlite(conn)
+            _DB_INITIALIZED = True
+        finally:
+            conn.close()
+
+
+def get_conn():
+    init_db()
+    return _connect()

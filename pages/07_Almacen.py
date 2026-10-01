@@ -10,21 +10,21 @@ from utils.almacen import (
     eliminar_seccion,
     guardar_seccion,
     listar_secciones,
-    listar_ubicaciones,
+    listar_ubicaciones_por_secciones,
     obtener_detalle_ubicacion,
     obtener_movimientos,
     registrar_movimiento,
     resumen_almacen,
 )
 from utils.branding import mostrar_logo
-from utils.db import get_conn, init_db
+from utils.db import init_db
 
 
-st.set_page_config(page_title="almacen virtual - Almacen Mator", layout="wide")
+st.set_page_config(page_title="Almacen Virtual - Almacen Mator", layout="wide")
 mostrar_logo()
 init_db()
 
-st.title("almacen virtual")
+st.title("Almacen Virtual")
 st.caption("Controla capacidad, ubicaciones, palets, unidades y pedidos desde un unico lugar.")
 
 
@@ -65,10 +65,9 @@ metricas[3].metric("Ocupacion", f"{porcentaje:.1f}%")
 st.progress(min(porcentaje / 100, 1.0), text=f"Ocupacion global: {porcentaje:.1f}%")
 
 secciones = listar_secciones()
-ubicaciones_por_seccion = {
-    seccion[0]: listar_ubicaciones(seccion[0])
-    for seccion in secciones
-}
+ubicaciones_por_seccion = listar_ubicaciones_por_secciones(
+    seccion[0] for seccion in secciones
+)
 
 
 def mapa_seccion():
@@ -344,10 +343,9 @@ with pestanas[3]:
                 st.dataframe(datos, use_container_width=True, hide_index=True)
                 if st.button("Importar movimientos", type="primary"):
                     secciones_actualizadas = listar_secciones()
-                    ubicaciones_actualizadas = {
-                        seccion[0]: listar_ubicaciones(seccion[0])
-                        for seccion in secciones_actualizadas
-                    }
+                    ubicaciones_actualizadas = listar_ubicaciones_por_secciones(
+                        seccion[0] for seccion in secciones_actualizadas
+                    )
                     ubicaciones = mapa_importacion_ubicaciones(
                         secciones_actualizadas,
                         ubicaciones_actualizadas,

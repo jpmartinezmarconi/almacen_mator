@@ -39,6 +39,32 @@ def listar_ubicaciones(seccion_id, incluir_inactivas=False):
         conn.close()
 
 
+def listar_ubicaciones_por_secciones(seccion_ids):
+    seccion_ids = tuple(seccion_ids)
+    if not seccion_ids:
+        return {}
+
+    placeholders = ", ".join("?" for _ in seccion_ids)
+    conn = get_conn()
+    try:
+        filas = conn.execute(
+            "SELECT u.seccion_id, u.id, u.codigo, u.fila, u.columna, "
+            "u.capacidad_palets, u.alto_m, u.ancho_m, u.fondo_m, u.activa, "
+            "COALESCE(SUM(s.palets), 0) AS palets_ocupados "
+            "FROM almacen_ubicaciones u LEFT JOIN almacen_stock s ON s.ubicacion_id = u.id "
+            f"WHERE u.seccion_id IN ({placeholders}) AND u.activa = 1 "
+            "GROUP BY u.id ORDER BY u.seccion_id, u.fila, u.columna",
+            seccion_ids,
+        ).fetchall()
+    finally:
+        conn.close()
+
+    resultado = {seccion_id: [] for seccion_id in seccion_ids}
+    for fila in filas:
+        resultado[fila[0]].append(fila[1:])
+    return resultado
+
+
 def obtener_detalle_ubicacion(ubicacion_id):
     conn = get_conn()
     try:
