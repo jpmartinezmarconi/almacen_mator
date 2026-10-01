@@ -672,3 +672,218 @@ def demanda_albaranes():
                     }
                 )
     return resultado
+
+
+def _normalizar_material(material):
+    return " ".join(material.casefold().split())
+
+
+def analizar_materiales_albaran(materiales):
+    agrupados = {}
+    patron = re.compile(r"^(.*?)\s*-\s*(\d+)\s+unidades?\s*$", re.IGNORECASE)
+    for linea in (materiales or "").splitlines():
+        coincidencia = patron.match(linea.strip())
+        if not coincidencia:
+            continue
+        nombre, unidades = coincidencia.groups()
+        nombre = nombre.strip()
+        if not nombre:
+            continue
+        clave = _normalizar_material(nombre)
+        if clave not in agrupados:
+            agrupados[clave] = {"material": nombre, "unidades": 0}
+        agrupados[clave]["unidades"] += int(unidades)
+    return list(agrupados.values())
+
+
+def obtener_ubicaciones_materiales(materiales):
+    claves = {_normalizar_material(material) for material in materiales if material.strip()}
+    resultado = {clave: [] for clave in claves}
+    if not claves:
+        return resultado
+
+    conn = get_conn()
+    try:
+        filas = conn.execute(
+            "SELECT s.material, s.codigo_material, a.nombre, sec.nombre, u.codigo, "
+            "s.palets, s.unidades_por_palet, s.unidades_sueltas "
+            "FROM almacen_stock s "
+            "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "JOIN almacenes a ON a.id=sec.almacen_id "
+            "WHERE sec.activa=1 AND u.activa=1 "
+            "ORDER BY a.id, sec.nombre, u.codigo, s.material, s.codigo_material"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for fila in filas:
+        clave = _normalizar_material(fila[0])
+        if clave in resultado:
+            resultado[clave].append(
+                {
+                    "material": fila[0],
+                    "codigo_material": fila[1],
+                    "nave": fila[2],
+                    "seccion": fila[3],
+                    "ubicacion": fila[4],
+                    "palets": fila[5],
+                    "unidades_por_palet": fila[6],
+                    "unidades_sueltas": fila[7],
+                    "unidades_disponibles": fila[5] * fila[6] + fila[7],
+                }
+            )
+    return resultado
+
+
+def procesar_albaran(albaran_id, observaciones, foto_preparacion, numero_serie):
+    conn = get_conn()
+    try:
+        albaran = conn.execute(
+            "SELECT materiales FROM albaranes WHERE id=? AND estado='entrada'",
+            (albaran_id,),
+        ).fetchone()
+        if not albaran:
+            raise ValueError("El albaran ya no esta pendiente de procesar.")
+
+        pedidos = analizar_materiales_albaran(albaran[0])
+        stock = conn.execute(
+            "SELECT s.id, s.material, s.codigo_material, s.palets, "
+            "s.unidades_por_palet, s.unidades_sueltas, u.id, u.codigo, "
+            "sec.nombre, a.nombre "
+            "FROM almacen_stock s "
+            "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "JOIN almacenes a ON a.id=sec.almacen_id "
+            "WHERE sec.activa=1 AND u.activa=1 "
+            "ORDER BY a.id, sec.nombre, u.codigo, s.material, s.codigo_material, s.id"
+        ).fetchall()
+        stock_por_material = {}
+        for fila in stock:
+            stock_por_material.setdefault(_normalizar_material(fila[1]), []).append(fila)
+
+        descuentos = []
+        faltantes = []
+        for pedido in pedidos:
+            clave = _normalizar_material(pedido["material"])
+            disponibles = stock_por_material.get(clave, [])
+            total_disponible = sum(
+                fila[3] * fila[4] + fila[5] for fila in disponibles
+            )
+            if total_disponible < pedido["unidades"]:
+                faltantes.append(
+                    {
+                        **pedido,
+                        "disponibles": total_disponible,
+                    }
+                )
+                continue
+
+            por_descontar = pedido["unidades"]
+            for fila in disponibles:
+                disponibles_fila = fila[3] * fila[4] + fila[5]
+                unidades = min(por_descontar, disponibles_fila)
+                if not unidades:
+                    continue
+                restantes = disponibles_fila - unidades
+                palets_restantes, sueltas_restantes = divmod(restantes, fila[4])
+                if restantes:
+                    actualizacion = conn.execute(
+                        "UPDATE almacen_stock SET palets=?, unidades_sueltas=?, actualizado=? "
+                        "WHERE id=? AND palets=? AND unidades_por_palet=? AND unidades_sueltas=?",
+                        (
+                            palets_restantes,
+                            sueltas_restantes,
+                            ahora(),
+                            fila[0],
+                            fila[3],
+                            fila[4],
+                            fila[5],
+                        ),
+                    )
+                else:
+                    actualizacion = conn.execute(
+                        "DELETE FROM almacen_stock "
+                        "WHERE id=? AND palets=? AND unidades_por_palet=? AND unidades_sueltas=?",
+                        (fila[0], fila[3], fila[4], fila[5]),
+                    )
+                if actualizacion.rowcount != 1:
+                    raise ValueError(
+                        "El stock cambio mientras se procesaba el albaran. "
+                        "Vuelve a intentarlo para actualizar las ubicaciones."
+                    )
+
+                palets_movimiento, sueltas_movimiento = divmod(unidades, fila[4])
+                conn.execute(
+                    "INSERT INTO almacen_movimientos "
+                    "(fecha, tipo, ubicacion_id, material, codigo_material, palets, "
+                    "unidades_por_palet, unidades_sueltas, referencia, albaran_id) "
+                    "VALUES (?, 'salida', ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        ahora(),
+                        fila[6],
+                        fila[1],
+                        fila[2],
+                        palets_movimiento,
+                        fila[4],
+                        sueltas_movimiento,
+                        f"Pedido albaran #{albaran_id} - {fila[9]} / {fila[8]}",
+                        albaran_id,
+                    ),
+                )
+                descuentos.append(
+                    {
+                        "material": pedido["material"],
+                        "unidades": unidades,
+                        "nave": fila[9],
+                        "seccion": fila[8],
+                        "ubicacion": fila[7],
+                    }
+                )
+                por_descontar -= unidades
+                if not por_descontar:
+                    break
+
+        observaciones_finales = observaciones.strip()
+        if faltantes:
+            detalle_faltantes = "; ".join(
+                f"{fila['material']}: pedidos {fila['unidades']}, disponibles {fila['disponibles']}"
+                for fila in faltantes
+            )
+            aviso = "No descontado del inventario por stock insuficiente: " + detalle_faltantes
+            observaciones_finales = (
+                f"{observaciones_finales}\n{aviso}".strip()
+            )
+
+        actualizacion_albaran = conn.execute(
+            "UPDATE albaranes SET estado='procesando', observaciones=?, "
+            "foto_preparacion=?, numero_serie=? WHERE id=? AND estado='entrada'",
+            (observaciones_finales, foto_preparacion, numero_serie, albaran_id),
+        )
+        if actualizacion_albaran.rowcount != 1:
+            raise ValueError("El albaran ya no esta pendiente de procesar.")
+        conn.commit()
+        return {"descuentos": descuentos, "faltantes": faltantes}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def obtener_consumos_albaran(albaran_id):
+    conn = get_conn()
+    try:
+        return conn.execute(
+            "SELECT a.nombre, sec.nombre, u.codigo, m.material, m.codigo_material, "
+            "(m.palets * m.unidades_por_palet + m.unidades_sueltas) "
+            "FROM almacen_movimientos m "
+            "JOIN almacen_ubicaciones u ON u.id=m.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "JOIN almacenes a ON a.id=sec.almacen_id "
+            "WHERE m.albaran_id=? AND m.tipo='salida' "
+            "ORDER BY a.id, sec.nombre, u.codigo, m.material",
+            (albaran_id,),
+        ).fetchall()
+    finally:
+        conn.close()

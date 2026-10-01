@@ -13,6 +13,15 @@ capacidad total en palets. En la pestaña Traslados se puede mover material entr
 ubicaciones de ambas naves; el traslado actualiza las dos existencias en una sola
 transaccion y registra su salida y recepcion en el historial.
 
+## Albaranes y existencias
+
+Al crear un albaran, la pantalla y el Excel muestran las ubicaciones actuales
+del material como referencia. Las existencias se descuentan al marcar el
+albaran como Procesando, no al crearlo. El descuento solo se aplica a las lineas
+con stock suficiente; las lineas insuficientes se dejan intactas y se indican
+en las observaciones. En Procesando se pueden consultar las ubicaciones de las
+que se descontaron las unidades.
+
 ## Despliegue en Render
 
 El servicio se configura con `render.yaml`. En Render, define `DATABASE_URL` como
