@@ -267,6 +267,93 @@ def eliminar_seccion(seccion_id):
     desactivar_secciones([seccion_id])
 
 
+def ajustar_stock(
+    ubicacion_id,
+    almacen_id,
+    material,
+    codigo_material,
+    palets,
+    unidades_por_palet,
+    unidades_sueltas,
+):
+    material = material.strip()
+    codigo_material = codigo_material.strip()
+    palets = int(palets)
+    unidades_por_palet = int(unidades_por_palet)
+    unidades_sueltas = int(unidades_sueltas)
+    if palets < 0 or unidades_sueltas < 0 or unidades_por_palet < 1:
+        raise ValueError("Las cantidades no pueden ser negativas y las unidades por palet deben ser al menos 1.")
+
+    conn = get_conn()
+    try:
+        stock = conn.execute(
+            "SELECT s.id, s.palets, s.unidades_por_palet, s.unidades_sueltas, "
+            "u.codigo, sec.nombre "
+            "FROM almacen_stock s "
+            "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "WHERE s.ubicacion_id=? AND sec.almacen_id=? AND sec.activa=1 "
+            "AND u.activa=1 AND s.material=? AND s.codigo_material=?",
+            (ubicacion_id, almacen_id, material, codigo_material),
+        ).fetchone()
+        if not stock:
+            raise ValueError("No se encontro ese material activo en esta nave.")
+
+        anteriores = (stock[1], stock[2], stock[3])
+        nuevos = (palets, unidades_por_palet, unidades_sueltas)
+        if anteriores == nuevos:
+            raise ValueError("Las cantidades indicadas son iguales a las actuales.")
+
+        capacidad = conn.execute(
+            "SELECT u.capacidad_palets, "
+            "COALESCE(SUM(s.palets), 0) "
+            "FROM almacen_ubicaciones u "
+            "LEFT JOIN almacen_stock s ON s.ubicacion_id=u.id "
+            "WHERE u.id=? AND u.activa=1 GROUP BY u.id",
+            (ubicacion_id,),
+        ).fetchone()
+        palets_ubicacion = capacidad[1] - stock[1] + palets
+        if palets_ubicacion > capacidad[0]:
+            raise ValueError(
+                f"La ubicacion {stock[4]} solo admite {capacidad[0]} palets y "
+                f"quedaria con {palets_ubicacion}."
+            )
+
+        if palets == 0 and unidades_sueltas == 0:
+            conn.execute("DELETE FROM almacen_stock WHERE id=?", (stock[0],))
+        else:
+            conn.execute(
+                "UPDATE almacen_stock SET palets=?, unidades_por_palet=?, "
+                "unidades_sueltas=?, actualizado=? WHERE id=?",
+                (palets, unidades_por_palet, unidades_sueltas, ahora(), stock[0]),
+            )
+
+        conn.execute(
+            "INSERT INTO almacen_movimientos "
+            "(fecha, tipo, ubicacion_id, material, codigo_material, palets, "
+            "unidades_por_palet, unidades_sueltas, referencia) "
+            "VALUES (?, 'ajuste', ?, ?, ?, ?, ?, ?, ?)",
+            (
+                ahora(),
+                ubicacion_id,
+                material,
+                codigo_material,
+                palets,
+                unidades_por_palet,
+                unidades_sueltas,
+                f"Ajuste manual en {stock[5]} / {stock[4]}: "
+                f"{anteriores[0]} palets x {anteriores[1]} + {anteriores[2]} sueltas "
+                f"-> {palets} palets x {unidades_por_palet} + {unidades_sueltas} sueltas",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def registrar_movimiento(
     tipo,
     ubicacion_id,
@@ -522,7 +609,8 @@ def obtener_movimientos(almacen_id=1, limite=100):
         return conn.execute(
             "SELECT m.fecha, CASE m.tipo "
             "WHEN 'traslado_salida' THEN 'Traslado enviado' "
-            "WHEN 'traslado_entrada' THEN 'Traslado recibido' ELSE m.tipo END, "
+            "WHEN 'traslado_entrada' THEN 'Traslado recibido' "
+            "WHEN 'ajuste' THEN 'Ajuste de inventario' ELSE m.tipo END, "
             "u.codigo, m.material, m.palets, "
             "m.unidades_por_palet, m.unidades_sueltas, m.referencia "
             "FROM almacen_movimientos m JOIN almacen_ubicaciones u ON u.id=m.ubicacion_id "

@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from utils.almacen import (
+    ajustar_stock,
     demanda_albaranes,
     desactivar_secciones,
     guardar_seccion,
@@ -251,6 +252,66 @@ with pestanas[1]:
                 st.rerun()
             except ValueError as error:
                 st.error(str(error))
+
+        st.subheader("Corregir existencias")
+        stock_para_ajuste = listar_stock_ubicaciones(almacen_id)
+        if not stock_para_ajuste:
+            st.info("Esta nave aun no tiene materiales para corregir.")
+        else:
+            indice_stock_ajuste = st.selectbox(
+                "Material que quieres corregir",
+                options=range(len(stock_para_ajuste)),
+                format_func=lambda indice: (
+                    f"{stock_para_ajuste[indice][3]}"
+                    f"{' (' + stock_para_ajuste[indice][4] + ')' if stock_para_ajuste[indice][4] else ''}"
+                    f" | {stock_para_ajuste[indice][2]} / {stock_para_ajuste[indice][1]}"
+                    f" | {stock_para_ajuste[indice][5]} palets x "
+                    f"{stock_para_ajuste[indice][6]} + {stock_para_ajuste[indice][7]} sueltas"
+                ),
+                key="stock_a_corregir",
+            )
+            stock_seleccionado = stock_para_ajuste[indice_stock_ajuste]
+            with st.form("formulario_ajuste_stock"):
+                st.caption(
+                    "Indica las cantidades correctas finales. Si pones 0 palets y "
+                    "0 unidades sueltas, se quitaran las existencias de este material."
+                )
+                cantidad_palets_corregida = st.number_input(
+                    "Palets correctos",
+                    min_value=0,
+                    step=1,
+                    value=int(stock_seleccionado[5]),
+                )
+                unidades_por_palet_corregidas = st.number_input(
+                    "Unidades correctas por palet",
+                    min_value=1,
+                    step=1,
+                    value=int(stock_seleccionado[6]),
+                )
+                unidades_sueltas_corregidas = st.number_input(
+                    "Unidades sueltas correctas",
+                    min_value=0,
+                    step=1,
+                    value=int(stock_seleccionado[7]),
+                )
+                guardar_ajuste = st.form_submit_button(
+                    "Guardar cantidades corregidas", type="primary"
+                )
+            if guardar_ajuste:
+                try:
+                    ajustar_stock(
+                        stock_seleccionado[0],
+                        almacen_id,
+                        stock_seleccionado[3],
+                        stock_seleccionado[4],
+                        cantidad_palets_corregida,
+                        unidades_por_palet_corregidas,
+                        unidades_sueltas_corregidas,
+                    )
+                    st.success("Existencias corregidas; el cambio queda anotado en el historial.")
+                    st.rerun()
+                except ValueError as error:
+                    st.error(str(error))
 
         movimientos = obtener_movimientos(almacen_id)
         if movimientos:
