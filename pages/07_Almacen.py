@@ -28,7 +28,10 @@ mostrar_logo()
 init_db()
 
 st.title("Almacen Virtual")
-st.caption("Controla capacidad, ubicaciones, palets, unidades y pedidos desde un unico lugar.")
+st.caption(
+    "Selecciona una nave, crea secciones con su capacidad en palets y registra "
+    "existencias o traslados."
+)
 
 almacenes = listar_almacenes()
 almacen_id = st.selectbox(
@@ -175,6 +178,11 @@ pestanas = st.tabs(
         "Traslados entre naves",
     ]
 )
+if not secciones:
+    st.info(
+        f"{next(fila[1] for fila in almacenes if fila[0] == almacen_id)} esta vacia. "
+        "Ve a Configuracion para crear tu primera seccion."
+    )
 
 with pestanas[0]:
     mapa_seccion()
@@ -261,28 +269,28 @@ with pestanas[2]:
     opciones_config.update({seccion[1]: seccion for seccion in secciones})
     seleccion_config = st.selectbox("Seccion a editar", list(opciones_config), key="seccion_config")
     seleccionada = opciones_config[seleccion_config]
-    valores = seleccionada or (None, "", "", 1, 1, 2.5, 10.0, 10.0, 1, 1)
+    valores = seleccionada or (None, "", "", 1, 1, 2.5, 1.2, 1.2, 1, 1)
     with st.form("formulario_seccion"):
         nombre = st.text_input("Nombre", value=valores[1])
         descripcion = st.text_input("Descripcion", value=valores[2] or "")
-        c1, c2, c3 = st.columns(3)
-        filas = c1.number_input("Filas", min_value=1, step=1, value=int(valores[3]))
-        columnas = c2.number_input("Columnas", min_value=1, step=1, value=int(valores[4]))
-        capacidad_palets = c3.number_input(
-            "Palets por espacio", min_value=1, step=1, value=int(valores[8])
+        capacidad_palets = st.number_input(
+            "Capacidad de la seccion (palets)",
+            min_value=1,
+            step=1,
+            value=int(valores[8]),
         )
-        c4, c5, c6 = st.columns(3)
-        alto_m = c4.number_input("Alto (m)", min_value=0.1, step=0.1, value=float(valores[5]))
-        ancho_m = c5.number_input("Ancho de espacio (m)", min_value=0.1, step=0.1, value=float(valores[6]))
-        fondo_m = c6.number_input("Fondo de espacio (m)", min_value=0.1, step=0.1, value=float(valores[7]))
-        guardar_config = st.form_submit_button("Guardar seccion y generar espacios", type="primary")
+        with st.expander("Dimensiones (opcional)"):
+            alto_m = st.number_input("Alto (m)", min_value=0.1, step=0.1, value=float(valores[5]))
+            ancho_m = st.number_input("Ancho (m)", min_value=0.1, step=0.1, value=float(valores[6]))
+            fondo_m = st.number_input("Fondo (m)", min_value=0.1, step=0.1, value=float(valores[7]))
+        guardar_config = st.form_submit_button("Guardar seccion", type="primary")
     if guardar_config:
         try:
             guardar_seccion(
                 nombre,
                 descripcion,
-                int(filas),
-                int(columnas),
+                1,
+                1,
                 float(alto_m),
                 float(ancho_m),
                 float(fondo_m),
@@ -290,7 +298,9 @@ with pestanas[2]:
                 valores[0],
                 almacen_id,
             )
-            st.success("Seccion guardada. Los espacios ya estan disponibles en el mapa.")
+            st.success(
+                f"Seccion guardada con capacidad para {int(capacidad_palets)} palets."
+            )
             st.rerun()
         except ValueError as error:
             st.error(str(error))

@@ -135,6 +135,18 @@ def guardar_seccion(
             ).fetchone()
             if not pertenece_a_nave:
                 raise ValueError("La seccion seleccionada no pertenece a esta nave.")
+            palets_actuales = conn.execute(
+                "SELECT COALESCE(SUM(s.palets), 0) "
+                "FROM almacen_stock s "
+                "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+                "WHERE u.seccion_id=?",
+                (seccion_id,),
+            ).fetchone()[0]
+            if palets_actuales > capacidad_palets:
+                raise ValueError(
+                    f"No puedes reducir la capacidad por debajo de los "
+                    f"{palets_actuales} palets que ya tiene la seccion."
+                )
             codigo_existente = conn.execute(
                 "SELECT codigo FROM almacen_ubicaciones WHERE seccion_id=? ORDER BY id LIMIT 1",
                 (seccion_id,),
