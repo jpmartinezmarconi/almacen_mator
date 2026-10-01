@@ -5,6 +5,20 @@ from utils.db import get_conn
 
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+OCUPACION_POR_STOCK_SQL = (
+    "{alias}.palets + CASE WHEN {alias}.unidades_sueltas > 0 "
+    "THEN ({alias}.unidades_sueltas + {alias}.unidades_por_palet - 1) "
+    "/ {alias}.unidades_por_palet ELSE 0 END"
+)
+
+
+def _espacios_ocupados(palets, unidades_por_palet, unidades_sueltas):
+    espacios_sueltos = (
+        (unidades_sueltas + unidades_por_palet - 1) // unidades_por_palet
+        if unidades_sueltas
+        else 0
+    )
+    return palets + espacios_sueltos
 
 
 def ahora():
@@ -40,7 +54,8 @@ def listar_ubicaciones(seccion_id, incluir_inactivas=False):
         return conn.execute(
             "SELECT u.id, u.codigo, u.fila, u.columna, u.capacidad_palets, u.alto_m, "
             "u.ancho_m, u.fondo_m, u.activa, "
-            "COALESCE(SUM(s.palets), 0) AS palets_ocupados "
+            f"COALESCE(SUM({OCUPACION_POR_STOCK_SQL.format(alias='s')}), 0) "
+            "AS palets_ocupados "
             "FROM almacen_ubicaciones u LEFT JOIN almacen_stock s ON s.ubicacion_id = u.id "
             "WHERE u.seccion_id = ?" + filtro + " GROUP BY u.id ORDER BY u.fila, u.columna",
             (seccion_id,),
@@ -60,7 +75,8 @@ def listar_ubicaciones_por_secciones(seccion_ids):
         filas = conn.execute(
             "SELECT u.seccion_id, u.id, u.codigo, u.fila, u.columna, "
             "u.capacidad_palets, u.alto_m, u.ancho_m, u.fondo_m, u.activa, "
-            "COALESCE(SUM(s.palets), 0) AS palets_ocupados "
+            f"COALESCE(SUM({OCUPACION_POR_STOCK_SQL.format(alias='s')}), 0) "
+            "AS palets_ocupados "
             "FROM almacen_ubicaciones u LEFT JOIN almacen_stock s ON s.ubicacion_id = u.id "
             f"WHERE u.seccion_id IN ({placeholders}) AND u.activa = 1 "
             "GROUP BY u.id ORDER BY u.seccion_id, u.fila, u.columna",
@@ -136,7 +152,7 @@ def guardar_seccion(
             if not pertenece_a_nave:
                 raise ValueError("La seccion seleccionada no pertenece a esta nave.")
             palets_actuales = conn.execute(
-                "SELECT COALESCE(SUM(s.palets), 0) "
+                f"SELECT COALESCE(SUM({OCUPACION_POR_STOCK_SQL.format(alias='s')}), 0) "
                 "FROM almacen_stock s "
                 "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
                 "WHERE u.seccion_id=?",
@@ -145,7 +161,7 @@ def guardar_seccion(
             if palets_actuales > capacidad_palets:
                 raise ValueError(
                     f"No puedes reducir la capacidad por debajo de los "
-                    f"{palets_actuales} palets que ya tiene la seccion."
+                    f"{palets_actuales} espacios de palet ocupados en la seccion."
                 )
             codigo_existente = conn.execute(
                 "SELECT codigo FROM almacen_ubicaciones WHERE seccion_id=? ORDER BY id LIMIT 1",
@@ -306,16 +322,20 @@ def ajustar_stock(
 
         capacidad = conn.execute(
             "SELECT u.capacidad_palets, "
-            "COALESCE(SUM(s.palets), 0) "
+            f"COALESCE(SUM({OCUPACION_POR_STOCK_SQL.format(alias='s')}), 0) "
             "FROM almacen_ubicaciones u "
             "LEFT JOIN almacen_stock s ON s.ubicacion_id=u.id "
             "WHERE u.id=? AND u.activa=1 GROUP BY u.id",
             (ubicacion_id,),
         ).fetchone()
-        palets_ubicacion = capacidad[1] - stock[1] + palets
+        palets_ubicacion = (
+            capacidad[1]
+            - _espacios_ocupados(stock[1], stock[2], stock[3])
+            + _espacios_ocupados(palets, unidades_por_palet, unidades_sueltas)
+        )
         if palets_ubicacion > capacidad[0]:
             raise ValueError(
-                f"La ubicacion {stock[4]} solo admite {capacidad[0]} palets y "
+                f"La ubicacion {stock[4]} solo admite {capacidad[0]} espacios de palet y "
                 f"quedaria con {palets_ubicacion}."
             )
 
@@ -395,15 +415,35 @@ def registrar_movimiento(
             (ubicacion_id, material, codigo_material),
         ).fetchone()
         palets_actuales = conn.execute(
-            "SELECT COALESCE(SUM(palets), 0) FROM almacen_stock WHERE ubicacion_id=?",
+            f"SELECT COALESCE(SUM({OCUPACION_POR_STOCK_SQL.format(alias='s')}), 0) "
+            "FROM almacen_stock s WHERE s.ubicacion_id=?",
             (ubicacion_id,),
         ).fetchone()[0]
 
         if tipo == "entrada":
-            if palets_actuales + palets > ubicacion[0]:
+            if stock:
+                upp = stock[2]
+                nueva_ocupacion_material = _espacios_ocupados(
+                    stock[1] + palets,
+                    upp,
+                    stock[3] + unidades_sueltas,
+                )
+                ocupacion_material_actual = _espacios_ocupados(
+                    stock[1], upp, stock[3]
+                )
+            else:
+                upp = unidades_por_palet
+                nueva_ocupacion_material = _espacios_ocupados(
+                    palets, upp, unidades_sueltas
+                )
+                ocupacion_material_actual = 0
+            palets_proyectados = (
+                palets_actuales - ocupacion_material_actual + nueva_ocupacion_material
+            )
+            if palets_proyectados > ubicacion[0]:
                 raise ValueError(
-                    f"La ubicacion solo admite {ubicacion[0]} palets y quedaria con "
-                    f"{palets_actuales + palets}."
+                    f"La ubicacion solo admite {ubicacion[0]} espacios de palet y quedaria con "
+                    f"{palets_proyectados}."
                 )
             if stock:
                 nuevo_palets = stock[1] + palets
@@ -519,13 +559,27 @@ def transferir_material(
             unidades_destino + unidades_a_trasladar, upp_destino
         )
         ocupacion_destino = conn.execute(
-            "SELECT COALESCE(SUM(palets), 0) FROM almacen_stock WHERE ubicacion_id=?",
+            f"SELECT COALESCE(SUM({OCUPACION_POR_STOCK_SQL.format(alias='s')}), 0) "
+            "FROM almacen_stock s WHERE s.ubicacion_id=?",
             (ubicacion_destino_id,),
         ).fetchone()[0]
-        if ocupacion_destino - (stock_destino[1] if stock_destino else 0) + nuevos_palets > destino[2]:
+        ocupacion_anterior_material = (
+            _espacios_ocupados(
+                stock_destino[1], stock_destino[2], stock_destino[3]
+            )
+            if stock_destino
+            else 0
+        )
+        ocupacion_nueva_material = _espacios_ocupados(
+            nuevos_palets, upp_destino, nuevas_sueltas
+        )
+        ocupacion_proyectada = (
+            ocupacion_destino - ocupacion_anterior_material + ocupacion_nueva_material
+        )
+        if ocupacion_proyectada > destino[2]:
             raise ValueError(
                 f"La ubicacion destino ({destino[1]}) no tiene capacidad para "
-                "los palets trasladados."
+                "los espacios de palet trasladados."
             )
 
         restantes_origen = unidades_origen - unidades_a_trasladar
@@ -630,8 +684,9 @@ def resumen_almacen(almacen_id=1):
             "SELECT COALESCE(SUM(u.capacidad_palets), 0), COALESCE(SUM(s.palets), 0) "
             "FROM almacen_ubicaciones u "
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
-            "LEFT JOIN (SELECT ubicacion_id, SUM(palets) AS palets "
-            "FROM almacen_stock GROUP BY ubicacion_id) s ON s.ubicacion_id=u.id "
+            "LEFT JOIN (SELECT ubicacion_id, "
+            f"SUM({OCUPACION_POR_STOCK_SQL.format(alias='stock')}) AS palets "
+            "FROM almacen_stock stock GROUP BY ubicacion_id) s ON s.ubicacion_id=u.id "
             "WHERE u.activa=1 AND sec.almacen_id=?",
             (almacen_id,),
         ).fetchone()

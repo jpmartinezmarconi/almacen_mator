@@ -49,7 +49,8 @@ if st.button("Cerrar sesión de Almacen Virtual"):
 
 st.caption(
     "Selecciona una nave, crea secciones con su capacidad en palets y registra "
-    "existencias o traslados."
+    "existencias o traslados. Cada pallet con existencias ocupa suelo, aunque "
+    "solo queden unidades sueltas."
 )
 
 almacenes = listar_almacenes()
@@ -93,9 +94,9 @@ def mapa_importacion_ubicaciones(secciones, ubicaciones_por_seccion):
 capacidad_total, palets_ocupados = resumen_almacen(almacen_id)
 porcentaje = (palets_ocupados / capacidad_total * 100) if capacidad_total else 0
 metricas = st.columns(4)
-metricas[0].metric("Capacidad total", f"{formato_numero(capacidad_total)} palets")
-metricas[1].metric("Palets ocupados", formato_numero(palets_ocupados))
-metricas[2].metric("Espacio libre", formato_numero(max(capacidad_total - palets_ocupados, 0)))
+metricas[0].metric("Capacidad total", f"{formato_numero(capacidad_total)} espacios")
+metricas[1].metric("Espacios ocupados", formato_numero(palets_ocupados))
+metricas[2].metric("Espacios libres", formato_numero(max(capacidad_total - palets_ocupados, 0)))
 metricas[3].metric("Ocupacion", f"{porcentaje:.1f}%")
 st.progress(min(porcentaje / 100, 1.0), text=f"Ocupacion global: {porcentaje:.1f}%")
 
@@ -133,13 +134,13 @@ def mapa_seccion():
                 ocupada = palets >= capacidad
                 tipo = "primary" if ocupada else "secondary"
                 if st.button(
-                    f"{ubicacion[1]}\n{palets}/{capacidad} palets",
+                    f"{ubicacion[1]}\n{palets}/{capacidad} espacios",
                     key=f"mapa_{ubicacion[0]}",
                     type=tipo,
                     use_container_width=True,
                 ):
                     st.session_state.ubicacion_seleccionada = ubicacion[0]
-                st.caption("Completa" if ocupada else ("Libre" if palets == 0 else "Parcial"))
+                st.caption("Ocupado" if ocupada else ("Libre" if palets == 0 else "Parcial"))
 
     ubicacion_id = st.session_state.get("ubicacion_seleccionada")
     ubicacion_seleccionada = next((fila for fila in ubicaciones if fila[0] == ubicacion_id), None)
@@ -176,9 +177,9 @@ def resumen_por_seccion():
             {
                 "Seccion": seccion[1],
                 "Espacios": len(ubicaciones),
-                "Capacidad (palets)": capacidad,
-                "Ocupados (palets)": ocupados,
-                "Libres (palets)": max(capacidad - ocupados, 0),
+                "Capacidad (espacios)": capacidad,
+                "Ocupados (espacios)": ocupados,
+                "Libres (espacios)": max(capacidad - ocupados, 0),
                 "Area restante (m2)": round(area_restante, 2),
                 "Porcentaje ocupado (%)": porcentaje_ocupado,
                 "Ocupacion (%)": porcentaje_ocupado,
@@ -353,7 +354,7 @@ with pestanas[2]:
         nombre = st.text_input("Nombre", value=valores[1])
         descripcion = st.text_input("Descripcion", value=valores[2] or "")
         capacidad_palets = st.number_input(
-            "Capacidad de la seccion (palets)",
+            "Capacidad de la seccion (espacios de palet)",
             min_value=1,
             step=1,
             value=int(valores[8]),
@@ -378,7 +379,7 @@ with pestanas[2]:
                 almacen_id,
             )
             st.success(
-                f"Seccion guardada con capacidad para {int(capacidad_palets)} palets."
+                f"Seccion guardada con capacidad para {int(capacidad_palets)} espacios de palet."
             )
             st.rerun()
         except ValueError as error:
