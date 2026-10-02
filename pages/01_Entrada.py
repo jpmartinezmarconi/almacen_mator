@@ -3,7 +3,11 @@ from utils.branding import mostrar_logo
 from utils.db import get_conn
 from utils.excel import generar_excel
 from utils.telegram import enviar_telegram
-from utils.almacen import analizar_materiales_albaran, obtener_ubicaciones_materiales
+from utils.almacen import (
+    analizar_materiales_albaran,
+    obtener_catalogo_materiales,
+    obtener_ubicaciones_materiales,
+)
 import datetime
 from zoneinfo import ZoneInfo
 
@@ -27,6 +31,12 @@ catalogo_materiales = sorted({
     for linea in (materiales_guardados or "").splitlines()
     if linea.strip()
 })
+materiales_existentes = {material.casefold() for material in catalogo_materiales}
+for material in obtener_catalogo_materiales():
+    if material.casefold() not in materiales_existentes:
+        catalogo_materiales.append(material)
+        materiales_existentes.add(material.casefold())
+catalogo_materiales.sort(key=str.casefold)
 
 num_lineas = st.number_input("Número de líneas", min_value=1, value=1)
 

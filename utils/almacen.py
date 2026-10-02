@@ -121,6 +121,22 @@ def listar_stock_ubicaciones(almacen_id):
         conn.close()
 
 
+def obtener_catalogo_materiales():
+    conn = get_conn()
+    try:
+        filas = conn.execute(
+            "SELECT DISTINCT s.material FROM almacen_stock s "
+            "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "WHERE sec.activa=1 AND u.activa=1 "
+            "AND (s.palets > 0 OR s.unidades_sueltas > 0) "
+            "ORDER BY LOWER(s.material), s.material"
+        ).fetchall()
+        return [fila[0] for fila in filas]
+    finally:
+        conn.close()
+
+
 def guardar_seccion(
     nombre,
     descripcion,
