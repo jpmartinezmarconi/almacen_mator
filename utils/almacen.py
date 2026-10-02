@@ -130,7 +130,7 @@ def obtener_catalogo_materiales():
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
             "WHERE sec.activa=1 AND u.activa=1 "
             "AND (s.palets > 0 OR s.unidades_sueltas > 0) "
-            "ORDER BY LOWER(s.material), s.material"
+            "ORDER BY s.material"
         ).fetchall()
         return [fila[0] for fila in filas]
     finally:
