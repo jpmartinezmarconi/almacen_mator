@@ -2,6 +2,7 @@ import io
 import re
 import unicodedata
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -165,6 +166,22 @@ def mapa_seccion():
 
 def resumen_por_seccion():
     filas = []
+    materiales_por_seccion = {}
+    for stock in listar_stock_ubicaciones(almacen_id):
+        nombre_seccion = stock[2]
+        material = stock[3]
+        codigo_material = stock[4]
+        palets = stock[5]
+        unidades_por_palet = stock[6]
+        unidades_sueltas = stock[7]
+        unidades_totales = int(palets) * int(unidades_por_palet) + int(unidades_sueltas)
+        codigo = f" ({codigo_material})" if codigo_material else ""
+        nombre_material = f"{material}{codigo}"
+        existencias = materiales_por_seccion.setdefault(nombre_seccion, {})
+        existencias[nombre_material] = (
+            existencias.get(nombre_material, 0) + unidades_totales
+        )
+
     for seccion in secciones:
         ubicaciones = ubicaciones_por_seccion.get(seccion[0], [])
         capacidad = sum(int(ubicacion[4]) for ubicacion in ubicaciones)
@@ -183,6 +200,14 @@ def resumen_por_seccion():
                 "Area restante (m2)": round(area_restante, 2),
                 "Porcentaje ocupado (%)": porcentaje_ocupado,
                 "Ocupacion (%)": porcentaje_ocupado,
+                "Materiales": "; ".join(
+                    f"{material}: {formato_numero(unidades)} unidades"
+                    for material, unidades in sorted(
+                        materiales_por_seccion.get(seccion[1], {}).items(),
+                        key=lambda fila: fila[0].casefold(),
+                    )
+                ) or "Sin materiales",
+                "Comentario": seccion[2] or "Sin comentario",
             }
         )
     return pd.DataFrame(filas)
@@ -215,12 +240,34 @@ with pestanas[0]:
             "Seccion",
             key=lambda nombres: nombres.str.casefold(),
         ).reset_index(drop=True)
-        st.dataframe(resumen, use_container_width=True, hide_index=True)
-        st.bar_chart(
-            resumen,
-            x="Seccion",
-            y="Ocupacion (%)",
-            color="Seccion",
+        st.dataframe(
+            resumen.drop(columns=["Materiales", "Comentario"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.altair_chart(
+            alt.Chart(resumen)
+            .mark_bar()
+            .encode(
+                x=alt.X(
+                    "Seccion:N",
+                    sort=resumen["Seccion"].tolist(),
+                    title="Seccion",
+                ),
+                y=alt.Y("Ocupacion (%):Q", title="Ocupacion (%)"),
+                color=alt.Color(
+                    "Seccion:N",
+                    scale=alt.Scale(scheme="category20"),
+                    legend=None,
+                ),
+                tooltip=[
+                    alt.Tooltip("Seccion:N", title="Seccion"),
+                    alt.Tooltip("Ocupacion (%):Q", title="Ocupacion", format=".1f"),
+                    alt.Tooltip("Materiales:N", title="Materiales"),
+                    alt.Tooltip("Comentario:N", title="Comentario"),
+                ],
+            ),
+            use_container_width=True,
         )
 
 with pestanas[1]:
