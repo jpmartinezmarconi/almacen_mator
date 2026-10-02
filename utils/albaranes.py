@@ -13,6 +13,72 @@ FINALIZACION_AUTOMATICA_HORAS = 24
 INTERVALO_FINALIZACION_SEGUNDOS = 60
 
 
+def _guardar_lineas_finalizadas(conn, albaran):
+    albaran_id, fecha, nombre, empresa, solicitado_por, materiales = albaran
+    for linea in (materiales or "").splitlines():
+        linea = linea.strip()
+        if not linea:
+            continue
+
+        material = linea
+        unidades = ""
+        if " - " in linea:
+            material, unidades_texto = linea.rsplit(" - ", 1)
+            unidades = unidades_texto.replace("unidades", "").strip()
+
+        conn.execute(
+            "INSERT INTO albaranes_finalizados "
+            "(albaran_id, fecha, nombre, empresa, solicitado_por, material, unidades) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT (albaran_id, material, unidades) DO NOTHING",
+            (
+                albaran_id,
+                fecha,
+                nombre,
+                empresa,
+                solicitado_por,
+                material,
+                unidades,
+            ),
+        )
+
+
+def finalizar_albaranes_seleccionados(albaran_ids):
+    ids = tuple(dict.fromkeys(int(albaran_id) for albaran_id in albaran_ids))
+    if not ids:
+        raise ValueError("Selecciona al menos un albaran en Procesando.")
+
+    placeholders = ", ".join("?" for _ in ids)
+    conn = get_conn()
+    try:
+        albaranes = conn.execute(
+            "SELECT id, fecha, nombre, empresa, solicitado_por, materiales "
+            f"FROM albaranes WHERE estado='procesando' AND id IN ({placeholders}) "
+            "ORDER BY id",
+            ids,
+        ).fetchall()
+
+        finalizados = 0
+        for albaran in albaranes:
+            actualizacion = conn.execute(
+                "UPDATE albaranes SET estado='finalizado' "
+                "WHERE id=? AND estado='procesando'",
+                (albaran[0],),
+            )
+            if actualizacion.rowcount != 1:
+                continue
+            _guardar_lineas_finalizadas(conn, albaran)
+            finalizados += 1
+
+        conn.commit()
+        return finalizados
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def finalizar_albaranes_vencidos(ahora=None):
     ahora = ahora or datetime.now(timezone.utc)
     if ahora.tzinfo is None:
@@ -40,32 +106,10 @@ def finalizar_albaranes_vencidos(ahora=None):
             if actualizacion.rowcount != 1:
                 continue
 
-            for linea in (materiales or "").splitlines():
-                linea = linea.strip()
-                if not linea:
-                    continue
-
-                material = linea
-                unidades = ""
-                if " - " in linea:
-                    material, unidades_texto = linea.rsplit(" - ", 1)
-                    unidades = unidades_texto.replace("unidades", "").strip()
-
-                conn.execute(
-                    "INSERT INTO albaranes_finalizados "
-                    "(albaran_id, fecha, nombre, empresa, solicitado_por, material, unidades) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?) "
-                    "ON CONFLICT (albaran_id, material, unidades) DO NOTHING",
-                    (
-                        albaran_id,
-                        fecha,
-                        nombre,
-                        empresa,
-                        solicitado_por,
-                        material,
-                        unidades,
-                    ),
-                )
+            _guardar_lineas_finalizadas(
+                conn,
+                (albaran_id, fecha, nombre, empresa, solicitado_por, materiales),
+            )
             finalizados += 1
 
         conn.commit()

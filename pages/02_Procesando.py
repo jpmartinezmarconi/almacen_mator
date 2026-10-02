@@ -12,6 +12,7 @@ from utils.almacen import (
 from utils.branding import mostrar_logo
 from utils.albaranes import (
     finalizar_albaranes_vencidos,
+    finalizar_albaranes_seleccionados,
     iniciar_finalizador_automatico,
 )
 from utils.db import get_conn, init_db
@@ -159,6 +160,42 @@ for albaran in pendientes:
 st.subheader("Albaranes en Procesando")
 if not en_proceso:
     st.info("No hay albaranes en proceso.")
+else:
+    st.caption(
+        f"Hay {len(en_proceso)} albaranes en Procesando. "
+        "Si ya están completados, puedes finalizarlos aquí sin esperar 24 horas. "
+        "Esta acción no vuelve a descontar existencias."
+    )
+    etiquetas_por_id = {
+        albaran[0]: f"#{albaran[0]} - {albaran[1]} ({albaran[2]})"
+        for albaran in en_proceso
+    }
+    ids_para_finalizar = st.multiselect(
+        "Selecciona los albaranes completados",
+        options=list(etiquetas_por_id),
+        format_func=lambda albaran_id: etiquetas_por_id[albaran_id],
+        key="albaranes_para_finalizar",
+    )
+    if st.button(
+        f"Finalizar seleccionados ({len(ids_para_finalizar)})",
+        type="primary",
+        disabled=not ids_para_finalizar,
+        key="finalizar_albaranes_procesando",
+    ):
+        try:
+            cantidad_finalizada = finalizar_albaranes_seleccionados(ids_para_finalizar)
+        except ValueError as error:
+            st.error(str(error))
+        else:
+            if cantidad_finalizada:
+                st.success(
+                    f"{cantidad_finalizada} albarán(es) finalizado(s). "
+                    "El cupo de Procesando ya está disponible."
+                )
+            else:
+                st.info("Los albaranes seleccionados ya no estaban en Procesando.")
+            st.rerun()
+
 for albaran in en_proceso:
     (
         id_,

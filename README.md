@@ -25,6 +25,8 @@ albaranes se marcan automaticamente como finalizados y sus lineas se guardan en
 el historial de finalizados que alimenta los reportes. Los albaranes que ya
 estaban en Procesando al desplegar esta mejora empiezan su primer conteo de
 24 horas desde la migracion, porque no existia una fecha de procesamiento previa.
+Los albaranes ya completados tambien se pueden finalizar manualmente, en grupo,
+desde la lista de Procesando, sin esperar las 24 horas.
 
 ## Despliegue en Render
 
