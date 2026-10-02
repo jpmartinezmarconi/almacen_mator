@@ -211,8 +211,17 @@ with pestanas[0]:
     if resumen.empty:
         st.info("Todavia no hay secciones configuradas.")
     else:
+        resumen = resumen.sort_values(
+            "Seccion",
+            key=lambda nombres: nombres.str.casefold(),
+        ).reset_index(drop=True)
         st.dataframe(resumen, use_container_width=True, hide_index=True)
-        st.bar_chart(resumen.set_index("Seccion")["Ocupacion (%)"])
+        st.bar_chart(
+            resumen,
+            x="Seccion",
+            y="Ocupacion (%)",
+            color="Seccion",
+        )
 
 with pestanas[1]:
     if not secciones:
