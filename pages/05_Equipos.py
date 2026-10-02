@@ -1,14 +1,22 @@
+import colorsys
 import io
 import re
 import unicodedata
 from datetime import date
 
+import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
 
 from utils.branding import mostrar_logo
 from utils.db import get_conn, init_db
+from utils.espacio_palets import (
+    ESPACIO_PALET_OPTIONS,
+    limpiar_espacio_palets,
+    mostrar_espacio_palets,
+    resumir_ocupacion_por_seccion,
+)
 
 PASSWORDS_EQUIPOS = {"ju@n", "t@ny"}
 EQUIPO_COLUMNS = ["nombre", "cantidad", "numero_serie", "seccion"]
@@ -49,6 +57,12 @@ seccion_lecturas = st.text_input(
     "Sección o ubicación",
     key="seccion_lecturas_prologic",
 )
+espacio_lecturas = st.selectbox(
+    "Espacio de palet por artículo",
+    options=ESPACIO_PALET_OPTIONS,
+    format_func=mostrar_espacio_palets,
+    key="espacio_lecturas_prologic",
+)
 
 with st.form("formulario_lectura_zebra", clear_on_submit=True):
     codigo_lectura = st.text_input("Código de barras", key="codigo_lectura_zebra")
@@ -71,6 +85,7 @@ if anadir_lectura:
                 "Descripcion": descripcion_lecturas.strip(),
                 "Unidades": 1,
                 "Seccion": seccion_lecturas.strip(),
+                "Espacio de palet": mostrar_espacio_palets(espacio_lecturas),
             }
         )
         st.success(f"Código añadido: {codigo_lectura}")
@@ -145,6 +160,12 @@ with st.form("formulario_equipo", clear_on_submit=True):
     cantidad = st.number_input("Cantidad", min_value=1, step=1, value=1)
     numero_serie = st.text_input("Número de serie", value=numero_serie_detectado)
     seccion = st.text_input("Sección")
+    espacio_palets = st.selectbox(
+        "Espacio de palet",
+        options=ESPACIO_PALET_OPTIONS,
+        format_func=mostrar_espacio_palets,
+        key="espacio_palets_equipo",
+    )
     guardar_equipo = st.form_submit_button("Guardar equipo")
 
 if guardar_equipo:
@@ -153,8 +174,15 @@ if guardar_equipo:
     else:
         conn = get_conn()
         conn.execute(
-            "INSERT INTO equipos (nombre, cantidad, numero_serie, seccion, fecha_alta) VALUES (?, ?, ?, ?, ?)",
-            (nombre.strip(), int(cantidad), numero_serie.strip(), seccion.strip(), date.today().isoformat()),
+            "INSERT INTO equipos (nombre, cantidad, numero_serie, seccion, fecha_alta, espacio_palets) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                nombre.strip(),
+                int(cantidad),
+                numero_serie.strip(),
+                seccion.strip(),
+                date.today().isoformat(),
+                espacio_palets,
+            ),
         )
         conn.commit()
         conn.close()
@@ -219,6 +247,7 @@ def preparar_importacion(archivo):
         "cantidad": ("cantidad", "unidades", "unidad", "cantidadtotal", "qty"),
         "numero_serie": ("numerodeserie", "numeroserie", "serie", "serial", "serialnumber"),
         "seccion": ("seccion", "area", "departamento", "ubicacion", "ubicación"),
+        "espacio_palets": ("espaciopalets", "espaciodepalet", "ocupacionpalet", "fraccionpalet"),
     }
 
     resultado = pd.DataFrame()
@@ -230,20 +259,28 @@ def preparar_importacion(archivo):
 
     if len(columnas_encontradas) == 0 and nombre_archivo.endswith(".csv"):
         datos = leer_csv_universal(archivo, header=None)
-        datos = datos.iloc[:, :4].copy()
-        datos.columns = list(alias)
-        resultado = datos
-    elif len(columnas_encontradas) < len(alias):
         if len(datos.columns) < 4:
-            faltantes = [destino for destino in alias if destino not in columnas_encontradas]
+            raise ValueError("El archivo necesita al menos cuatro columnas: " + ", ".join(alias))
+        datos = datos.iloc[:, :5].copy()
+        datos.columns = list(alias)[:len(datos.columns)]
+        resultado = datos
+    elif not all(columna in columnas_encontradas for columna in ("nombre", "cantidad", "numero_serie", "seccion")):
+        if len(datos.columns) < 4:
+            faltantes = [
+                destino for destino in ("nombre", "cantidad", "numero_serie", "seccion")
+                if destino not in columnas_encontradas
+            ]
             raise ValueError("El archivo necesita al menos cuatro columnas: " + ", ".join(faltantes))
         datos = datos.iloc[:, :4].copy()
-        datos.columns = list(alias)
+        datos.columns = ["nombre", "cantidad", "numero_serie", "seccion"]
         resultado = datos
     else:
         for destino, columna in columnas_encontradas.items():
             resultado[destino] = datos[columna]
 
+    if "espacio_palets" not in resultado:
+        resultado["espacio_palets"] = 1.0
+    resultado["espacio_palets"] = resultado["espacio_palets"].apply(limpiar_espacio_palets)
     resultado["cantidad"] = resultado["cantidad"].apply(limpiar_cantidad).astype("Int64")
     for columna in ("nombre", "numero_serie", "seccion"):
         resultado[columna] = resultado[columna].fillna("").astype(str).str.strip()
@@ -266,9 +303,16 @@ if archivo_importacion is not None:
         if st.button("Importar equipos", key="confirmar_importacion"):
             conn = get_conn()
             conn.executemany(
-                "INSERT INTO equipos (nombre, cantidad, numero_serie, seccion, fecha_alta) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO equipos (nombre, cantidad, numero_serie, seccion, fecha_alta, espacio_palets) VALUES (?, ?, ?, ?, ?, ?)",
                 [
-                    (fila.nombre, int(fila.cantidad), fila.numero_serie, fila.seccion, date.today().isoformat())
+                    (
+                        fila.nombre,
+                        int(fila.cantidad),
+                        fila.numero_serie,
+                        fila.seccion,
+                        date.today().isoformat(),
+                        float(fila.espacio_palets),
+                    )
                     for fila in equipos_importados.itertuples(index=False)
                 ],
             )
@@ -282,11 +326,57 @@ if archivo_importacion is not None:
 st.subheader("Equipos registrados")
 conn = get_conn()
 equipos = pd.read_sql_query(
-    "SELECT id, nombre, cantidad, numero_serie, seccion, fecha_alta FROM equipos ORDER BY id DESC",
+    "SELECT id, nombre, cantidad, numero_serie, seccion, espacio_palets, fecha_alta FROM equipos ORDER BY id DESC",
     conn,
 )
 conn.close()
 if equipos.empty:
     st.info("Todavía no hay equipos registrados.")
 else:
+    resumen_ocupacion = resumir_ocupacion_por_seccion(equipos)
+    materiales = resumen_ocupacion["Material"].drop_duplicates().tolist()
+    colores = []
+    for indice in range(len(materiales)):
+        rojo, verde, azul = colorsys.hsv_to_rgb(
+            (indice * 0.618033988749895) % 1,
+            0.65,
+            0.85,
+        )
+        colores.append(
+            f"#{round(rojo * 255):02x}{round(verde * 255):02x}{round(azul * 255):02x}"
+        )
+
+    grafica_ocupacion = (
+        alt.Chart(resumen_ocupacion)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "Espacio ocupado (palets):Q",
+                stack="zero",
+                title="Espacio ocupado (palets)",
+            ),
+            y=alt.Y("Sección:N", title="Área", sort="-x"),
+            color=alt.Color(
+                "Material:N",
+                scale=alt.Scale(domain=materiales, range=colores),
+                legend=alt.Legend(title="Material"),
+            ),
+            tooltip=[
+                alt.Tooltip("Sección:N", title="Área"),
+                alt.Tooltip("Material:N", title="Material"),
+                alt.Tooltip(
+                    "Espacio ocupado (palets):Q",
+                    title="Espacio ocupado (palets)",
+                    format=".2f",
+                ),
+            ],
+        )
+        .properties(height=max(160, 42 * resumen_ocupacion["Sección"].nunique()))
+    )
+    st.subheader("Ocupación por área y material")
+    st.caption("Cada color representa un material; el ancho muestra los palets ocupados.")
+    st.altair_chart(grafica_ocupacion, use_container_width=True)
+
+    equipos["espacio_palets"] = equipos["espacio_palets"].apply(mostrar_espacio_palets)
+    equipos = equipos.rename(columns={"espacio_palets": "Espacio de palet"})
     st.dataframe(equipos, use_container_width=True, hide_index=True)

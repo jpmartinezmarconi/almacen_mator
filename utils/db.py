@@ -42,9 +42,18 @@ def get_conn():
             cantidad INTEGER NOT NULL,
             numero_serie TEXT NOT NULL,
             seccion TEXT NOT NULL,
-            fecha_alta TEXT NOT NULL
+            fecha_alta TEXT NOT NULL,
+            espacio_palets REAL NOT NULL DEFAULT 1.0
         )
     """)
+
+    equipo_columns = {
+        row[1] for row in cur.execute("PRAGMA table_info(equipos)").fetchall()
+    }
+    if "espacio_palets" not in equipo_columns:
+        cur.execute(
+            "ALTER TABLE equipos ADD COLUMN espacio_palets REAL NOT NULL DEFAULT 1.0"
+        )
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS reparaciones (
