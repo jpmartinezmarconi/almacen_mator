@@ -783,7 +783,8 @@ def obtener_ubicaciones_materiales(materiales):
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
             "JOIN almacenes a ON a.id=sec.almacen_id "
             "WHERE sec.activa=1 AND u.activa=1 "
-            "ORDER BY a.id, sec.nombre, u.codigo, s.material, s.codigo_material"
+            "ORDER BY CASE WHEN LOWER(TRIM(a.nombre))='nave 1' THEN 0 ELSE 1 END, "
+            "a.id, sec.nombre, u.codigo, s.material, s.codigo_material"
         ).fetchall()
     finally:
         conn.close()
@@ -827,7 +828,8 @@ def procesar_albaran(albaran_id, observaciones, foto_preparacion, numero_serie):
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
             "JOIN almacenes a ON a.id=sec.almacen_id "
             "WHERE sec.activa=1 AND u.activa=1 "
-            "ORDER BY a.id, sec.nombre, u.codigo, s.material, s.codigo_material, s.id"
+            "ORDER BY CASE WHEN LOWER(TRIM(a.nombre))='nave 1' THEN 0 ELSE 1 END, "
+            "a.id, sec.nombre, u.codigo, s.material, s.codigo_material, s.id"
         ).fetchall()
         stock_por_material = {}
         for fila in stock:
