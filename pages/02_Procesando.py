@@ -5,6 +5,7 @@ import streamlit as st
 from PIL import Image, ImageOps
 from utils.almacen import (
     analizar_materiales_albaran,
+    clave_material_pedido,
     obtener_consumos_albaran,
     obtener_ubicaciones_materiales,
     procesar_albaran,
@@ -74,13 +75,16 @@ for albaran in pendientes:
 
         pedidos = analizar_materiales_albaran(materiales)
         stock_por_material = obtener_ubicaciones_materiales(
-            [pedido["material"] for pedido in pedidos]
+            pedidos
         )
         st.subheader("Ubicaciones para preparar el pedido")
         for pedido in pedidos:
-            clave = " ".join(pedido["material"].casefold().split())
+            clave = clave_material_pedido(pedido)
             ubicaciones = stock_por_material.get(clave, [])
             disponible = sum(fila["unidades_disponibles"] for fila in ubicaciones)
+            nombre_visible = pedido["material"]
+            if pedido["codigo_material"]:
+                nombre_visible += f" (Código: {pedido['codigo_material']})"
             if ubicaciones:
                 detalle = ", ".join(
                     f"{fila['nave']} / {fila['seccion']} / {fila['ubicacion']} "
@@ -88,7 +92,7 @@ for albaran in pendientes:
                     for fila in ubicaciones
                 )
                 st.write(
-                    f"**{pedido['material']}** — {detalle}. "
+                    f"**{nombre_visible}** — {detalle}. "
                     f"Pedido: {pedido['unidades']}; disponible: {disponible}."
                 )
                 if disponible < pedido["unidades"]:
@@ -98,7 +102,7 @@ for albaran in pendientes:
                     )
             else:
                 st.warning(
-                    f"{pedido['material']}: sin existencias registradas; "
+                    f"{nombre_visible}: sin existencias registradas; "
                     "esta línea no se descontará."
                 )
 

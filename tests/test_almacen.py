@@ -5,7 +5,12 @@ import unittest
 from contextlib import contextmanager
 from unittest.mock import patch
 
-from utils.almacen import obtener_ubicaciones_materiales, procesar_albaran
+from utils.almacen import (
+    analizar_materiales_albaran,
+    buscar_stock_materiales,
+    obtener_ubicaciones_materiales,
+    procesar_albaran,
+)
 
 
 @contextmanager
@@ -104,21 +109,23 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
                 "(id, materiales, estado) VALUES (1, 'Material A - 4 unidades', 'entrada')"
             )
 
-    def _guardar_stock(self, ubicacion_id, unidades):
+    def _guardar_stock(self, ubicacion_id, unidades, codigo=""):
         with conectar_db(self.db_path) as conn:
             conn.execute(
                 "INSERT INTO almacen_stock "
                 "(ubicacion_id, material, codigo_material, palets, "
                 "unidades_por_palet, unidades_sueltas, actualizado) "
-                "VALUES (?, 'Material A', '', 0, 10, ?, '2026-10-05')",
-                (ubicacion_id, unidades),
+                "VALUES (?, 'Material A', ?, 0, 10, ?, '2026-10-05')",
+                (ubicacion_id, codigo, unidades),
             )
 
     def test_descuenta_nave_1_antes_que_nave_2_aunque_tenga_mayor_id(self):
         self._guardar_stock(1, 5)
         self._guardar_stock(2, 3)
 
-        ubicaciones = obtener_ubicaciones_materiales(["Material A"])["material a"]
+        ubicaciones = obtener_ubicaciones_materiales(["Material A"])[
+            ("material a", "")
+        ]
         resultado = procesar_albaran(1, "", "", "")
 
         self.assertEqual([fila["nave"] for fila in ubicaciones], ["Nave 1", "Nave 2"])
@@ -147,6 +154,49 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
             [("Nave 2", 4)],
         )
         self.assertEqual(resultado["faltantes"], [])
+
+    def test_busca_y_descuenta_por_codigo_de_material(self):
+        self._guardar_stock(2, 7, "SKU-A")
+        self._guardar_stock(2, 9, "SKU-B")
+        with conectar_db(self.db_path) as conn:
+            conn.execute(
+                "UPDATE albaranes SET materiales=? WHERE id=1",
+                ("Material A [Codigo: SKU-B] - 4 unidades",),
+            )
+
+        pedido = analizar_materiales_albaran(
+            "Material A [Codigo: SKU-B] - 4 unidades"
+        )
+        ubicaciones = obtener_ubicaciones_materiales(pedido)
+        resultado = procesar_albaran(1, "", "", "")
+
+        self.assertEqual(pedido[0]["codigo_material"], "SKU-B")
+        self.assertEqual(
+            [fila["codigo_material"] for fila in ubicaciones[("material a", "sku-b")]],
+            ["SKU-B"],
+        )
+        self.assertEqual(
+            [(fila["nave"], fila["unidades"]) for fila in resultado["descuentos"]],
+            [("Nave 1", 4)],
+        )
+        with conectar_db(self.db_path) as conn:
+            cantidades = conn.execute(
+                "SELECT codigo_material, unidades_sueltas FROM almacen_stock "
+                "ORDER BY codigo_material"
+            ).fetchall()
+        self.assertEqual(cantidades, [("SKU-A", 7), ("SKU-B", 5)])
+
+    def test_busqueda_global_encuentra_fragmentos_de_nombre_y_codigo(self):
+        self._guardar_stock(2, 7, "SKU-ABC-123")
+
+        resultados_nombre = buscar_stock_materiales("terial a")
+        resultados_codigo = buscar_stock_materiales("abc-12")
+
+        self.assertEqual(len(resultados_nombre), 1)
+        self.assertEqual(len(resultados_codigo), 1)
+        self.assertEqual(resultados_codigo[0][4], "SKU-ABC-123")
+        self.assertEqual(resultados_codigo[0][1], "Sección N1")
+        self.assertEqual(resultados_codigo[0][5] * resultados_codigo[0][6] + resultados_codigo[0][7], 7)
 
 
 if __name__ == "__main__":

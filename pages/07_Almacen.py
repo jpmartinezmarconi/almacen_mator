@@ -8,6 +8,7 @@ import streamlit as st
 
 from utils.almacen import (
     ajustar_stock,
+    buscar_stock_materiales,
     demanda_albaranes,
     desactivar_secciones,
     guardar_seccion,
@@ -53,6 +54,46 @@ st.caption(
     "existencias o traslados. Cada pallet con existencias ocupa suelo, aunque "
     "solo queden unidades sueltas."
 )
+
+consulta_material = st.text_input(
+    "Buscar materiales en todo el almacén virtual",
+    placeholder="Escribe parte del nombre o el código del material",
+    key="buscar_material_almacen_virtual",
+)
+if consulta_material.strip():
+    resultados_busqueda = buscar_stock_materiales(consulta_material)
+    if resultados_busqueda:
+        df_busqueda = filas_a_dataframe(
+            resultados_busqueda,
+            [
+                "Almacen",
+                "Seccion",
+                "Ubicacion",
+                "Material",
+                "Codigo",
+                "Palets",
+                "Unidades por palet",
+                "Unidades sueltas",
+            ],
+        )
+        df_busqueda["Unidades disponibles"] = (
+            df_busqueda["Palets"] * df_busqueda["Unidades por palet"]
+            + df_busqueda["Unidades sueltas"]
+        )
+        df_busqueda = (
+            df_busqueda.groupby(
+                ["Almacen", "Seccion", "Material", "Codigo"],
+                as_index=False,
+                sort=False,
+            )
+            .agg(
+                Ubicaciones=("Ubicacion", lambda valores: ", ".join(sorted(set(valores)))),
+                **{"Unidades disponibles": ("Unidades disponibles", "sum")},
+            )
+        )
+        st.dataframe(df_busqueda, use_container_width=True, hide_index=True)
+    else:
+        st.info("No se encontraron materiales que coincidan en el almacén virtual.")
 
 almacenes = listar_almacenes()
 almacen_id = st.selectbox(

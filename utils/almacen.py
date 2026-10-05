@@ -121,6 +121,46 @@ def listar_stock_ubicaciones(almacen_id):
         conn.close()
 
 
+def buscar_stock_materiales(consulta):
+    consulta = consulta.strip()
+    if not consulta:
+        return []
+    conn = get_conn()
+    try:
+        return conn.execute(
+            "SELECT a.nombre, sec.nombre, u.codigo, s.material, s.codigo_material, "
+            "s.palets, s.unidades_por_palet, s.unidades_sueltas "
+            "FROM almacen_stock s "
+            "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "JOIN almacenes a ON a.id=sec.almacen_id "
+            "WHERE sec.activa=1 AND u.activa=1 "
+            "AND (s.palets > 0 OR s.unidades_sueltas > 0) "
+            "AND (LOWER(s.material) LIKE LOWER(?) "
+            "OR LOWER(s.codigo_material) LIKE LOWER(?)) "
+            "ORDER BY CASE WHEN LOWER(TRIM(a.nombre))='nave 1' THEN 0 ELSE 1 END, "
+            "a.nombre, sec.nombre, s.material, s.codigo_material, u.codigo",
+            (f"%{consulta}%", f"%{consulta}%"),
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+def obtener_catalogo_materiales_con_codigo():
+    conn = get_conn()
+    try:
+        return conn.execute(
+            "SELECT DISTINCT s.material, s.codigo_material FROM almacen_stock s "
+            "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+            "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
+            "WHERE sec.activa=1 AND u.activa=1 "
+            "AND (s.palets > 0 OR s.unidades_sueltas > 0) "
+            "ORDER BY s.material, s.codigo_material"
+        ).fetchall()
+    finally:
+        conn.close()
+
+
 def obtener_catalogo_materiales():
     conn = get_conn()
     try:
@@ -749,26 +789,52 @@ def _normalizar_material(material):
     return " ".join(material.casefold().split())
 
 
+def clave_material_pedido(pedido):
+    return (
+        _normalizar_material(pedido["material"]),
+        _normalizar_material(pedido.get("codigo_material", "")),
+    )
+
+
+def formatear_material_albaran(material, codigo_material=""):
+    material = material.strip()
+    codigo_material = codigo_material.strip()
+    return f"{material} [Codigo: {codigo_material}]" if codigo_material else material
+
+
 def analizar_materiales_albaran(materiales):
     agrupados = {}
-    patron = re.compile(r"^(.*?)\s*-\s*(\d+)\s+unidades?\s*$", re.IGNORECASE)
+    patron = re.compile(
+        r"^(.*?)(?:\s*\[Codigo:\s*([^\]]+)\])?\s*-\s*(\d+)\s+unidades?\s*$",
+        re.IGNORECASE,
+    )
     for linea in (materiales or "").splitlines():
         coincidencia = patron.match(linea.strip())
         if not coincidencia:
             continue
-        nombre, unidades = coincidencia.groups()
+        nombre, codigo_material, unidades = coincidencia.groups()
         nombre = nombre.strip()
+        codigo_material = (codigo_material or "").strip()
         if not nombre:
             continue
-        clave = _normalizar_material(nombre)
+        pedido = {"material": nombre, "codigo_material": codigo_material}
+        clave = clave_material_pedido(pedido)
         if clave not in agrupados:
-            agrupados[clave] = {"material": nombre, "unidades": 0}
+            agrupados[clave] = {**pedido, "unidades": 0}
         agrupados[clave]["unidades"] += int(unidades)
     return list(agrupados.values())
 
 
 def obtener_ubicaciones_materiales(materiales):
-    claves = {_normalizar_material(material) for material in materiales if material.strip()}
+    pedidos = [
+        material if isinstance(material, dict) else {"material": material}
+        for material in materiales
+    ]
+    claves = {
+        clave_material_pedido(pedido)
+        for pedido in pedidos
+        if pedido["material"].strip()
+    }
     resultado = {clave: [] for clave in claves}
     if not claves:
         return resultado
@@ -790,8 +856,14 @@ def obtener_ubicaciones_materiales(materiales):
         conn.close()
 
     for fila in filas:
-        clave = _normalizar_material(fila[0])
-        if clave in resultado:
+        clave_material = _normalizar_material(fila[0])
+        codigo_material = _normalizar_material(fila[1] or "")
+        claves_coincidentes = [
+            clave
+            for clave in claves
+            if clave[0] == clave_material and (not clave[1] or clave[1] == codigo_material)
+        ]
+        for clave in claves_coincidentes:
             resultado[clave].append(
                 {
                     "material": fila[0],
@@ -833,13 +905,25 @@ def procesar_albaran(albaran_id, observaciones, foto_preparacion, numero_serie):
         ).fetchall()
         stock_por_material = {}
         for fila in stock:
-            stock_por_material.setdefault(_normalizar_material(fila[1]), []).append(fila)
+            clave = (
+                _normalizar_material(fila[1]),
+                _normalizar_material(fila[2] or ""),
+            )
+            stock_por_material.setdefault(clave, []).append(fila)
 
         descuentos = []
         faltantes = []
         for pedido in pedidos:
-            clave = _normalizar_material(pedido["material"])
-            disponibles = stock_por_material.get(clave, [])
+            clave = clave_material_pedido(pedido)
+            if clave[1]:
+                disponibles = stock_por_material.get(clave, [])
+            else:
+                disponibles = [
+                    fila
+                    for (nombre, _codigo), filas in stock_por_material.items()
+                    if nombre == clave[0]
+                    for fila in filas
+                ]
             total_disponible = sum(
                 fila[3] * fila[4] + fila[5] for fila in disponibles
             )

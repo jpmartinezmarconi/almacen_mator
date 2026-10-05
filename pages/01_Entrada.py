@@ -5,7 +5,9 @@ from utils.excel import generar_excel
 from utils.telegram import enviar_telegram
 from utils.almacen import (
     analizar_materiales_albaran,
-    obtener_catalogo_materiales,
+    clave_material_pedido,
+    formatear_material_albaran,
+    obtener_catalogo_materiales_con_codigo,
     obtener_ubicaciones_materiales,
 )
 import datetime
@@ -25,18 +27,35 @@ conn_materiales = get_conn()
 filas_materiales = conn_materiales.execute("SELECT materiales FROM albaranes").fetchall()
 conn_materiales.close()
 
-catalogo_materiales = sorted({
-    linea.rsplit(" - ", 1)[0].strip()
-    for (materiales_guardados,) in filas_materiales
-    for linea in (materiales_guardados or "").splitlines()
-    if linea.strip()
-})
-materiales_existentes = {material.casefold() for material in catalogo_materiales}
-for material in obtener_catalogo_materiales():
-    if material.casefold() not in materiales_existentes:
-        catalogo_materiales.append(material)
-        materiales_existentes.add(material.casefold())
-catalogo_materiales.sort(key=str.casefold)
+catalogo_por_clave = {}
+for (materiales_guardados,) in filas_materiales:
+    for pedido_guardado in analizar_materiales_albaran(materiales_guardados):
+        clave = clave_material_pedido(pedido_guardado)
+        catalogo_por_clave.setdefault(
+            clave,
+            (pedido_guardado["material"], pedido_guardado["codigo_material"]),
+        )
+
+for material, codigo_material in obtener_catalogo_materiales_con_codigo():
+    clave = clave_material_pedido(
+        {"material": material, "codigo_material": codigo_material or ""}
+    )
+    catalogo_por_clave[clave] = (material, codigo_material or "")
+
+catalogo_por_etiqueta = {}
+for material, codigo_material in sorted(
+    catalogo_por_clave.values(),
+    key=lambda articulo: (articulo[0].casefold(), articulo[1].casefold()),
+):
+    etiqueta = (
+        f"{material} — Código: {codigo_material}"
+        if codigo_material
+        else material
+    )
+    catalogo_por_etiqueta[etiqueta] = formatear_material_albaran(
+        material, codigo_material
+    )
+catalogo_materiales = list(catalogo_por_etiqueta)
 
 num_lineas = st.number_input("Número de líneas", min_value=1, value=1)
 
@@ -52,24 +71,25 @@ for i in range(num_lineas):
             f"Material {i+1}",
             catalogo_materiales,
             index=None,
-            placeholder="Escribe para buscar un material existente",
+            placeholder="Busca por nombre o código de material",
             key=f"seleccion_material_{i}",
         )
-        mat = material_seleccionado or ""
+        mat = catalogo_por_etiqueta.get(material_seleccionado, "")
     uni = st.number_input(f"Unidades {i+1}", min_value=1, value=1)
     materiales.append(f"{mat} - {uni} unidades")
 
 pedidos_material = analizar_materiales_albaran("\n".join(materiales))
-stock_por_material = obtener_ubicaciones_materiales(
-    [pedido["material"] for pedido in pedidos_material]
-)
+stock_por_material = obtener_ubicaciones_materiales(pedidos_material)
 ubicaciones_albaran = []
 if pedidos_material:
     st.subheader("Ubicaciones actuales del material")
     for pedido in pedidos_material:
-        clave_material = " ".join(pedido["material"].casefold().split())
+        clave_material = clave_material_pedido(pedido)
         ubicaciones = stock_por_material.get(clave_material, [])
         disponible = sum(fila["unidades_disponibles"] for fila in ubicaciones)
+        nombre_visible = pedido["material"]
+        if pedido["codigo_material"]:
+            nombre_visible += f" (Código: {pedido['codigo_material']})"
         if ubicaciones:
             detalle = ", ".join(
                 f"{fila['nave']} / {fila['seccion']} / {fila['ubicacion']} "
@@ -77,16 +97,16 @@ if pedidos_material:
                 for fila in ubicaciones
             )
             st.caption(
-                f"{pedido['material']}: {detalle}. "
+                f"{nombre_visible}: {detalle}. "
                 f"Disponible: {disponible}; pedido: {pedido['unidades']}."
             )
             ubicaciones_albaran.append(
-                f"{pedido['material']} ({pedido['unidades']} unidades): {detalle}"
+                f"{nombre_visible} ({pedido['unidades']} unidades): {detalle}"
             )
         else:
-            st.warning(f"{pedido['material']}: no aparece en existencias de ninguna nave.")
+            st.warning(f"{nombre_visible}: no aparece en existencias de ninguna nave.")
             ubicaciones_albaran.append(
-                f"{pedido['material']} ({pedido['unidades']} unidades): sin existencias registradas"
+                f"{nombre_visible} ({pedido['unidades']} unidades): sin existencias registradas"
             )
     st.info(
         "Estas ubicaciones son orientativas al crear el albaran. "
