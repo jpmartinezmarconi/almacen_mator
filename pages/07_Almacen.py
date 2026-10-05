@@ -63,9 +63,9 @@ consulta_material = st.text_input(
 if consulta_material.strip():
     resultados_busqueda = buscar_stock_materiales(consulta_material)
     if resultados_busqueda:
-        df_busqueda = filas_a_dataframe(
+        df_busqueda = pd.DataFrame(
             resultados_busqueda,
-            [
+            columns=[
                 "Almacen",
                 "Seccion",
                 "Ubicacion",
