@@ -6,11 +6,16 @@ from contextlib import contextmanager
 from unittest.mock import patch
 
 from utils.almacen import (
+    OCUPACION_POR_STOCK_SQL,
+    ajustar_stock,
     analizar_materiales_albaran,
     buscar_stock_materiales,
     obtener_ubicaciones_materiales,
     procesar_albaran,
+    registrar_movimiento,
+    transferir_material,
 )
+from utils.db import _init_sqlite
 
 
 @contextmanager
@@ -55,7 +60,8 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
                     id INTEGER PRIMARY KEY,
                     seccion_id INTEGER,
                     codigo TEXT,
-                    activa INTEGER
+                    activa INTEGER,
+                    capacidad_palets INTEGER DEFAULT 10
                 );
                 CREATE TABLE almacen_stock (
                     id INTEGER PRIMARY KEY,
@@ -65,6 +71,7 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
                     palets INTEGER,
                     unidades_por_palet INTEGER,
                     unidades_sueltas INTEGER,
+                    espacios_por_palet INTEGER NOT NULL DEFAULT 1,
                     actualizado TEXT
                 );
                 CREATE TABLE almacen_movimientos (
@@ -109,14 +116,14 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
                 "(id, materiales, estado) VALUES (1, 'Material A - 4 unidades', 'entrada')"
             )
 
-    def _guardar_stock(self, ubicacion_id, unidades, codigo=""):
+    def _guardar_stock(self, ubicacion_id, unidades, codigo="", espacios=1):
         with conectar_db(self.db_path) as conn:
             conn.execute(
                 "INSERT INTO almacen_stock "
                 "(ubicacion_id, material, codigo_material, palets, "
-                "unidades_por_palet, unidades_sueltas, actualizado) "
-                "VALUES (?, 'Material A', ?, 0, 10, ?, '2026-10-05')",
-                (ubicacion_id, codigo, unidades),
+                "unidades_por_palet, unidades_sueltas, espacios_por_palet, actualizado) "
+                "VALUES (?, 'Material A', ?, 0, 10, ?, ?, '2026-10-05')",
+                (ubicacion_id, codigo, unidades, espacios),
             )
 
     def test_descuenta_nave_1_antes_que_nave_2_aunque_tenga_mayor_id(self):
@@ -197,6 +204,112 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
         self.assertEqual(resultados_codigo[0][4], "SKU-ABC-123")
         self.assertEqual(resultados_codigo[0][1], "Sección N1")
         self.assertEqual(resultados_codigo[0][5] * resultados_codigo[0][6] + resultados_codigo[0][7], 7)
+
+    def test_entrada_valora_un_palet_como_tres_espacios(self):
+        registrar_movimiento(
+            "entrada",
+            2,
+            "Material grande",
+            "SKU-L",
+            1,
+            10,
+            0,
+            espacios_por_palet=3,
+        )
+
+        with conectar_db(self.db_path) as conn:
+            fila = conn.execute(
+                "SELECT palets, espacios_por_palet FROM almacen_stock"
+            ).fetchone()
+            ocupacion = conn.execute(
+                "SELECT " + OCUPACION_POR_STOCK_SQL.format(alias="s")
+                + " FROM almacen_stock s"
+            ).fetchone()[0]
+        self.assertEqual(fila, (1, 3))
+        self.assertEqual(ocupacion, 3)
+
+    def test_ajuste_permite_configurar_huella_de_un_material_existente(self):
+        self._guardar_stock(2, 10)
+
+        ajustar_stock(2, 2, "Material A", "", 1, 10, 0, 3)
+
+        with conectar_db(self.db_path) as conn:
+            fila = conn.execute(
+                "SELECT palets, espacios_por_palet FROM almacen_stock"
+            ).fetchone()
+            ocupacion = conn.execute(
+                "SELECT " + OCUPACION_POR_STOCK_SQL.format(alias="s")
+                + " FROM almacen_stock s"
+            ).fetchone()[0]
+        self.assertEqual(fila, (1, 3))
+        self.assertEqual(ocupacion, 3)
+
+    def test_migracion_conserva_stock_existente_con_un_espacio_por_palet(self):
+        ruta_db = os.path.join(self.directorio.name, "legacy.db")
+        with conectar_db(ruta_db) as conn:
+            conn.execute(
+                "CREATE TABLE app_migrations "
+                "(nombre TEXT PRIMARY KEY, aplicada_en TEXT DEFAULT CURRENT_TIMESTAMP)"
+            )
+            conn.execute(
+                "INSERT INTO app_migrations (nombre) "
+                "VALUES ('reset_nave1_for_clean_start_20261001')"
+            )
+            conn.execute("""
+                CREATE TABLE almacen_stock (
+                    id INTEGER PRIMARY KEY,
+                    ubicacion_id INTEGER NOT NULL,
+                    material TEXT NOT NULL,
+                    codigo_material TEXT NOT NULL DEFAULT '',
+                    palets INTEGER NOT NULL DEFAULT 0,
+                    unidades_por_palet INTEGER NOT NULL DEFAULT 1,
+                    unidades_sueltas INTEGER NOT NULL DEFAULT 0,
+                    actualizado TEXT NOT NULL
+                )
+            """)
+            conn.execute(
+                "INSERT INTO almacen_stock "
+                "(id, ubicacion_id, material, palets, unidades_por_palet, actualizado) "
+                "VALUES (1, 99, 'Material existente', 2, 10, '2026-10-07')"
+            )
+
+        with conectar_db(ruta_db) as conn:
+            _init_sqlite(conn)
+            fila = conn.execute(
+                "SELECT material, palets, espacios_por_palet "
+                "FROM almacen_stock WHERE id=1"
+            ).fetchone()
+
+        self.assertEqual(fila, ("Material existente", 2, 1))
+
+    def test_rechaza_entrada_si_espacios_fisicos_superan_capacidad(self):
+        with self.assertRaisesRegex(ValueError, "quedaria con 12"):
+            registrar_movimiento(
+                "entrada",
+                2,
+                "Material grande",
+                "SKU-L",
+                4,
+                10,
+                0,
+                espacios_por_palet=3,
+            )
+
+    def test_traslado_conserva_espacios_por_palet(self):
+        self._guardar_stock(1, 10, espacios=3)
+
+        transferir_material(1, 2, "Material A", "", 1, 0)
+
+        with conectar_db(self.db_path) as conn:
+            destino = conn.execute(
+                "SELECT espacios_por_palet FROM almacen_stock WHERE ubicacion_id=2"
+            ).fetchone()
+            ocupacion = conn.execute(
+                "SELECT " + OCUPACION_POR_STOCK_SQL.format(alias="s")
+                + " FROM almacen_stock s WHERE s.ubicacion_id=2"
+            ).fetchone()[0]
+        self.assertEqual(destino, (3,))
+        self.assertEqual(ocupacion, 3)
 
 
 if __name__ == "__main__":

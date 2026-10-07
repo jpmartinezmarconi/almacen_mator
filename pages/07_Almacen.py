@@ -74,12 +74,22 @@ if consulta_material.strip():
                 "Palets",
                 "Unidades por palet",
                 "Unidades sueltas",
+                "Espacios por palet",
             ],
         )
         df_busqueda["Unidades disponibles"] = (
             df_busqueda["Palets"] * df_busqueda["Unidades por palet"]
             + df_busqueda["Unidades sueltas"]
         )
+        df_busqueda["Espacios ocupados"] = (
+            df_busqueda["Palets"]
+            + (
+                df_busqueda["Unidades sueltas"]
+                + df_busqueda["Unidades por palet"]
+                - 1
+            )
+            // df_busqueda["Unidades por palet"]
+        ) * df_busqueda["Espacios por palet"]
         df_busqueda = (
             df_busqueda.groupby(
                 ["Almacen", "Seccion", "Material", "Codigo"],
@@ -89,6 +99,7 @@ if consulta_material.strip():
             .agg(
                 Ubicaciones=("Ubicacion", lambda valores: ", ".join(sorted(set(valores)))),
                 **{"Unidades disponibles": ("Unidades disponibles", "sum")},
+                **{"Espacios ocupados": ("Espacios ocupados", "sum")},
             )
         )
         st.dataframe(df_busqueda, use_container_width=True, hide_index=True)
@@ -197,11 +208,29 @@ def mapa_seccion():
         return
     df_detalle = filas_a_dataframe(
         detalle,
-        ["ID", "Material", "Codigo", "Palets", "Unidades por palet", "Unidades sueltas", "Actualizado"],
+        [
+            "ID",
+            "Material",
+            "Codigo",
+            "Palets",
+            "Unidades por palet",
+            "Unidades sueltas",
+            "Actualizado",
+            "Espacios por palet",
+        ],
     )
     df_detalle["Unidades totales"] = (
         df_detalle["Palets"] * df_detalle["Unidades por palet"] + df_detalle["Unidades sueltas"]
     )
+    df_detalle["Espacios ocupados"] = (
+        df_detalle["Palets"]
+        + (
+            df_detalle["Unidades sueltas"]
+            + df_detalle["Unidades por palet"]
+            - 1
+        )
+        // df_detalle["Unidades por palet"]
+    ) * df_detalle["Espacios por palet"]
     st.dataframe(df_detalle.drop(columns=["ID"]), use_container_width=True, hide_index=True)
 
 
@@ -228,8 +257,11 @@ def resumen_por_seccion():
         capacidad = sum(int(ubicacion[4]) for ubicacion in ubicaciones)
         ocupados = sum(int(ubicacion[9]) for ubicacion in ubicaciones)
         area_por_espacio = float(seccion[6]) * float(seccion[7])
-        espacios_ocupados = sum(1 for ubicacion in ubicaciones if int(ubicacion[9]) > 0)
-        area_restante = max(len(ubicaciones) - espacios_ocupados, 0) * area_por_espacio
+        espacios_libres = sum(
+            max(int(ubicacion[4]) - int(ubicacion[9]), 0)
+            for ubicacion in ubicaciones
+        )
+        area_restante = espacios_libres * area_por_espacio
         porcentaje_ocupado = round(ocupados / capacidad * 100, 1) if capacidad else 0
         filas.append(
             {
@@ -328,7 +360,16 @@ with pestanas[1]:
             st.dataframe(
                 filas_a_dataframe(
                     detalle,
-                    ["ID", "Material", "Codigo", "Palets", "Unidades por palet", "Unidades sueltas", "Actualizado"],
+                    [
+                        "ID",
+                        "Material",
+                        "Codigo",
+                        "Palets",
+                        "Unidades por palet",
+                        "Unidades sueltas",
+                        "Actualizado",
+                        "Espacios por palet",
+                    ],
                 ).drop(columns=["ID"]),
                 use_container_width=True,
                 hide_index=True,
@@ -340,10 +381,24 @@ with pestanas[1]:
             tipo = st.radio("Tipo de movimiento", ["entrada", "salida"], horizontal=True)
             material = st.text_input("Material")
             codigo_material = st.text_input("Codigo de material (opcional)")
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             palets = col1.number_input("Palets", min_value=0, step=1, value=0)
             unidades_por_palet = col2.number_input("Unidades por palet", min_value=1, step=1, value=1)
             unidades_sueltas = col3.number_input("Unidades sueltas", min_value=0, step=1, value=0)
+            st.caption(
+                "Si cada palet ocupa el hueco de varios, indícalo como espacios por palet."
+            )
+            espacios_por_palet = (
+                col4.number_input(
+                    "Espacios ocupados por palet",
+                    min_value=1,
+                    step=1,
+                    value=1,
+                    help="Un palet puede ocupar varios espacios del mapa.",
+                )
+                if tipo == "entrada"
+                else 1
+            )
             referencia = st.text_input("Referencia o nota")
             albaran_id = st.selectbox(
                 "Vincular albaran (opcional)",
@@ -363,6 +418,7 @@ with pestanas[1]:
                     unidades_sueltas,
                     referencia,
                     albaran_id or None,
+                    espacios_por_palet,
                 )
                 st.success("Movimiento registrado y ocupacion actualizada.")
                 st.rerun()
@@ -383,6 +439,7 @@ with pestanas[1]:
                     f" | {stock_para_ajuste[indice][2]} / {stock_para_ajuste[indice][1]}"
                     f" | {stock_para_ajuste[indice][5]} palets x "
                     f"{stock_para_ajuste[indice][6]} + {stock_para_ajuste[indice][7]} sueltas"
+                    f" | {stock_para_ajuste[indice][8]} espacios/palet"
                 ),
                 key="stock_a_corregir",
             )
@@ -410,6 +467,12 @@ with pestanas[1]:
                     step=1,
                     value=int(stock_seleccionado[7]),
                 )
+                espacios_por_palet_corregidos = st.number_input(
+                    "Espacios ocupados por palet",
+                    min_value=1,
+                    step=1,
+                    value=int(stock_seleccionado[8]),
+                )
                 guardar_ajuste = st.form_submit_button(
                     "Guardar cantidades corregidas", type="primary"
                 )
@@ -423,6 +486,7 @@ with pestanas[1]:
                         cantidad_palets_corregida,
                         unidades_por_palet_corregidas,
                         unidades_sueltas_corregidas,
+                        espacios_por_palet_corregidos,
                     )
                     st.success("Existencias corregidas; el cambio queda anotado en el historial.")
                     st.rerun()
@@ -517,6 +581,7 @@ with pestanas[3]:
             "palets": 1,
             "unidades_por_palet": 20,
             "unidades_sueltas": 0,
+            "espacios_por_palet": 1,
             "tipo_movimiento": "entrada",
             "referencia": "Inicial",
             "albaran_id": "",
@@ -545,6 +610,7 @@ with pestanas[3]:
                 "material": ("material", "producto", "descripcion"),
                 "palets": ("palets", "pallets", "pallet"),
                 "unidades_por_palet": ("unidades_por_palet", "unidades_palet", "cantidad_por_palet"),
+                "espacios_por_palet": ("espacios_por_palet", "espacios_palet", "ocupacion_por_palet"),
                 "unidades_sueltas": ("unidades_sueltas", "sueltas", "unidades"),
                 "tipo_movimiento": ("tipo_movimiento", "tipo", "movimiento"),
                 "codigo_material": ("codigo_material", "codigo", "sku"),
@@ -594,6 +660,7 @@ with pestanas[3]:
                                 int(float(fila.get("unidades_sueltas", 0) or 0)),
                                 str(fila.get("referencia", "")),
                                 int(float(fila["albaran_id"])) if str(fila.get("albaran_id", "")).strip() else None,
+                                int(float(fila.get("espacios_por_palet", 1) or 1)),
                             )
                             importados += 1
                         except (ValueError, TypeError) as error:
@@ -671,7 +738,8 @@ with pestanas[5]:
             )
             st.caption(
                 f"Disponible en origen: {material_origen[5]} palets de "
-                f"{material_origen[6]} unidades y {material_origen[7]} unidades sueltas."
+                f"{material_origen[6]} unidades y {material_origen[7]} unidades sueltas; "
+                f"cada palet ocupa {material_origen[8]} espacios."
             )
             with st.form("formulario_traslado", clear_on_submit=True):
                 palets_trasladar = st.number_input(

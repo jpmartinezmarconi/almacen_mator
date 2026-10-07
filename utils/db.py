@@ -141,6 +141,7 @@ def _init_postgres(connection):
         ubicacion_id INTEGER NOT NULL, material TEXT NOT NULL,
         codigo_material TEXT NOT NULL DEFAULT '', palets INTEGER NOT NULL DEFAULT 0,
         unidades_por_palet INTEGER NOT NULL DEFAULT 1, unidades_sueltas INTEGER NOT NULL DEFAULT 0,
+        espacios_por_palet INTEGER NOT NULL DEFAULT 1,
         actualizado TEXT NOT NULL, UNIQUE (ubicacion_id, material, codigo_material),
         FOREIGN KEY (ubicacion_id) REFERENCES almacen_ubicaciones(id)
     )""")
@@ -151,6 +152,10 @@ def _init_postgres(connection):
         unidades_por_palet INTEGER NOT NULL DEFAULT 1, unidades_sueltas INTEGER NOT NULL DEFAULT 0,
         referencia TEXT, albaran_id INTEGER, FOREIGN KEY (ubicacion_id) REFERENCES almacen_ubicaciones(id)
     )""")
+    if "espacios_por_palet" not in _postgres_columns(connection, "almacen_stock"):
+        cursor.execute(
+            "ALTER TABLE almacen_stock ADD COLUMN espacios_por_palet INTEGER NOT NULL DEFAULT 1"
+        )
     if "almacen_id" not in _postgres_columns(connection, "almacen_secciones"):
         cursor.execute("ALTER TABLE almacen_secciones ADD COLUMN almacen_id INTEGER")
     cursor.execute(
@@ -284,6 +289,7 @@ def _init_sqlite(connection):
         id INTEGER PRIMARY KEY AUTOINCREMENT, ubicacion_id INTEGER NOT NULL,
         material TEXT NOT NULL, codigo_material TEXT NOT NULL DEFAULT '', palets INTEGER NOT NULL DEFAULT 0,
         unidades_por_palet INTEGER NOT NULL DEFAULT 1, unidades_sueltas INTEGER NOT NULL DEFAULT 0,
+        espacios_por_palet INTEGER NOT NULL DEFAULT 1,
         actualizado TEXT NOT NULL, UNIQUE (ubicacion_id, material, codigo_material),
         FOREIGN KEY (ubicacion_id) REFERENCES almacen_ubicaciones(id)
     )""")
@@ -294,6 +300,13 @@ def _init_sqlite(connection):
         unidades_sueltas INTEGER NOT NULL DEFAULT 0, referencia TEXT, albaran_id INTEGER,
         FOREIGN KEY (ubicacion_id) REFERENCES almacen_ubicaciones(id)
     )""")
+    stock_columns = {
+        row[1] for row in cur.execute("PRAGMA table_info(almacen_stock)").fetchall()
+    }
+    if "espacios_por_palet" not in stock_columns:
+        cur.execute(
+            "ALTER TABLE almacen_stock ADD COLUMN espacios_por_palet INTEGER NOT NULL DEFAULT 1"
+        )
     _migrate_sqlite_warehouse_tables(connection, almacenes["Nave 1"])
     cur.execute("CREATE INDEX IF NOT EXISTS idx_almacen_stock_ubicacion ON almacen_stock(ubicacion_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_almacen_movimientos_fecha ON almacen_movimientos(fecha)")

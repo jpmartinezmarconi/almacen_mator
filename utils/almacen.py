@@ -6,19 +6,24 @@ from utils.db import get_conn
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 OCUPACION_POR_STOCK_SQL = (
-    "{alias}.palets + CASE WHEN {alias}.unidades_sueltas > 0 "
+    "({alias}.palets + CASE WHEN {alias}.unidades_sueltas > 0 "
     "THEN ({alias}.unidades_sueltas + {alias}.unidades_por_palet - 1) "
-    "/ {alias}.unidades_por_palet ELSE 0 END"
+    "/ {alias}.unidades_por_palet ELSE 0 END) * {alias}.espacios_por_palet"
 )
 
 
-def _espacios_ocupados(palets, unidades_por_palet, unidades_sueltas):
+def _espacios_ocupados(
+    palets,
+    unidades_por_palet,
+    unidades_sueltas,
+    espacios_por_palet=1,
+):
     espacios_sueltos = (
         (unidades_sueltas + unidades_por_palet - 1) // unidades_por_palet
         if unidades_sueltas
         else 0
     )
-    return palets + espacios_sueltos
+    return (palets + espacios_sueltos) * espacios_por_palet
 
 
 def ahora():
@@ -96,7 +101,7 @@ def obtener_detalle_ubicacion(ubicacion_id):
     try:
         return conn.execute(
             "SELECT s.id, s.material, s.codigo_material, s.palets, s.unidades_por_palet, "
-            "s.unidades_sueltas, s.actualizado FROM almacen_stock s "
+            "s.unidades_sueltas, s.actualizado, s.espacios_por_palet FROM almacen_stock s "
             "WHERE s.ubicacion_id = ? ORDER BY s.material",
             (ubicacion_id,),
         ).fetchall()
@@ -109,7 +114,7 @@ def listar_stock_ubicaciones(almacen_id):
     try:
         return conn.execute(
             "SELECT u.id, u.codigo, sec.nombre, s.material, s.codigo_material, s.palets, "
-            "s.unidades_por_palet, s.unidades_sueltas "
+            "s.unidades_por_palet, s.unidades_sueltas, s.espacios_por_palet "
             "FROM almacen_stock s "
             "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
@@ -129,7 +134,7 @@ def buscar_stock_materiales(consulta):
     try:
         return conn.execute(
             "SELECT a.nombre, sec.nombre, u.codigo, s.material, s.codigo_material, "
-            "s.palets, s.unidades_por_palet, s.unidades_sueltas "
+            "s.palets, s.unidades_por_palet, s.unidades_sueltas, s.espacios_por_palet "
             "FROM almacen_stock s "
             "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
@@ -347,20 +352,29 @@ def ajustar_stock(
     palets,
     unidades_por_palet,
     unidades_sueltas,
+    espacios_por_palet=None,
 ):
     material = material.strip()
     codigo_material = codigo_material.strip()
     palets = int(palets)
     unidades_por_palet = int(unidades_por_palet)
     unidades_sueltas = int(unidades_sueltas)
-    if palets < 0 or unidades_sueltas < 0 or unidades_por_palet < 1:
+    if espacios_por_palet is not None:
+        espacios_por_palet = int(espacios_por_palet)
+    if (
+        palets < 0
+        or unidades_sueltas < 0
+        or unidades_por_palet < 1
+    ):
         raise ValueError("Las cantidades no pueden ser negativas y las unidades por palet deben ser al menos 1.")
+    if espacios_por_palet is not None and espacios_por_palet < 1:
+        raise ValueError("Los espacios ocupados por palet deben ser al menos 1.")
 
     conn = get_conn()
     try:
         stock = conn.execute(
             "SELECT s.id, s.palets, s.unidades_por_palet, s.unidades_sueltas, "
-            "u.codigo, sec.nombre "
+            "u.codigo, sec.nombre, s.espacios_por_palet "
             "FROM almacen_stock s "
             "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
@@ -371,8 +385,11 @@ def ajustar_stock(
         if not stock:
             raise ValueError("No se encontro ese material activo en esta nave.")
 
-        anteriores = (stock[1], stock[2], stock[3])
-        nuevos = (palets, unidades_por_palet, unidades_sueltas)
+        espacios_por_palet = (
+            stock[6] if espacios_por_palet is None else espacios_por_palet
+        )
+        anteriores = (stock[1], stock[2], stock[3], stock[6])
+        nuevos = (palets, unidades_por_palet, unidades_sueltas, espacios_por_palet)
         if anteriores == nuevos:
             raise ValueError("Las cantidades indicadas son iguales a las actuales.")
 
@@ -386,8 +403,13 @@ def ajustar_stock(
         ).fetchone()
         palets_ubicacion = (
             capacidad[1]
-            - _espacios_ocupados(stock[1], stock[2], stock[3])
-            + _espacios_ocupados(palets, unidades_por_palet, unidades_sueltas)
+            - _espacios_ocupados(stock[1], stock[2], stock[3], stock[6])
+            + _espacios_ocupados(
+                palets,
+                unidades_por_palet,
+                unidades_sueltas,
+                espacios_por_palet,
+            )
         )
         if palets_ubicacion > capacidad[0]:
             raise ValueError(
@@ -400,8 +422,15 @@ def ajustar_stock(
         else:
             conn.execute(
                 "UPDATE almacen_stock SET palets=?, unidades_por_palet=?, "
-                "unidades_sueltas=?, actualizado=? WHERE id=?",
-                (palets, unidades_por_palet, unidades_sueltas, ahora(), stock[0]),
+                "unidades_sueltas=?, espacios_por_palet=?, actualizado=? WHERE id=?",
+                (
+                    palets,
+                    unidades_por_palet,
+                    unidades_sueltas,
+                    espacios_por_palet,
+                    ahora(),
+                    stock[0],
+                ),
             )
 
         conn.execute(
@@ -419,7 +448,9 @@ def ajustar_stock(
                 unidades_sueltas,
                 f"Ajuste manual en {stock[5]} / {stock[4]}: "
                 f"{anteriores[0]} palets x {anteriores[1]} + {anteriores[2]} sueltas "
-                f"-> {palets} palets x {unidades_por_palet} + {unidades_sueltas} sueltas",
+                f"(ocupan {anteriores[3]} espacios por palet) -> {palets} palets x "
+                f"{unidades_por_palet} + {unidades_sueltas} sueltas "
+                f"(ocupan {espacios_por_palet} espacios por palet)",
             ),
         )
         conn.commit()
@@ -440,6 +471,7 @@ def registrar_movimiento(
     unidades_sueltas,
     referencia="",
     albaran_id=None,
+    espacios_por_palet=1,
 ):
     tipo = tipo.lower().strip()
     material = material.strip()
@@ -447,12 +479,19 @@ def registrar_movimiento(
     palets = int(palets)
     unidades_por_palet = int(unidades_por_palet)
     unidades_sueltas = int(unidades_sueltas)
+    espacios_por_palet = int(espacios_por_palet)
     if tipo not in {"entrada", "salida"}:
         raise ValueError("El movimiento debe ser de entrada o salida.")
     if not material:
         raise ValueError("El material es obligatorio.")
-    if palets < 0 or unidades_sueltas < 0 or unidades_por_palet < 1:
+    if (
+        palets < 0
+        or unidades_sueltas < 0
+        or unidades_por_palet < 1
+    ):
         raise ValueError("Las cantidades no pueden ser negativas.")
+    if espacios_por_palet < 1:
+        raise ValueError("Los espacios ocupados por palet deben ser al menos 1.")
     if palets == 0 and unidades_sueltas == 0:
         raise ValueError("Indica al menos un palet o una unidad.")
 
@@ -466,7 +505,8 @@ def registrar_movimiento(
             raise ValueError("La ubicacion seleccionada no esta activa.")
 
         stock = conn.execute(
-            "SELECT id, palets, unidades_por_palet, unidades_sueltas FROM almacen_stock "
+            "SELECT id, palets, unidades_por_palet, unidades_sueltas, espacios_por_palet "
+            "FROM almacen_stock "
             "WHERE ubicacion_id=? AND material=? AND codigo_material=?",
             (ubicacion_id, material, codigo_material),
         ).fetchone()
@@ -483,14 +523,15 @@ def registrar_movimiento(
                     stock[1] + palets,
                     upp,
                     stock[3] + unidades_sueltas,
+                    stock[4],
                 )
                 ocupacion_material_actual = _espacios_ocupados(
-                    stock[1], upp, stock[3]
+                    stock[1], upp, stock[3], stock[4]
                 )
             else:
                 upp = unidades_por_palet
                 nueva_ocupacion_material = _espacios_ocupados(
-                    palets, upp, unidades_sueltas
+                    palets, upp, unidades_sueltas, espacios_por_palet
                 )
                 ocupacion_material_actual = 0
             palets_proyectados = (
@@ -513,9 +554,19 @@ def registrar_movimiento(
                 upp = unidades_por_palet
                 conn.execute(
                     "INSERT INTO almacen_stock "
-                    "(ubicacion_id, material, codigo_material, palets, unidades_por_palet, unidades_sueltas, actualizado) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (ubicacion_id, material, codigo_material, palets, upp, unidades_sueltas, ahora()),
+                    "(ubicacion_id, material, codigo_material, palets, unidades_por_palet, "
+                    "unidades_sueltas, espacios_por_palet, actualizado) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        ubicacion_id,
+                        material,
+                        codigo_material,
+                        palets,
+                        upp,
+                        unidades_sueltas,
+                        espacios_por_palet,
+                        ahora(),
+                    ),
                 )
         else:
             if not stock:
@@ -590,7 +641,7 @@ def transferir_material(
             raise ValueError("El traslado debe ser entre naves distintas.")
 
         stock_origen = conn.execute(
-            "SELECT id, palets, unidades_por_palet, unidades_sueltas "
+            "SELECT id, palets, unidades_por_palet, unidades_sueltas, espacios_por_palet "
             "FROM almacen_stock WHERE ubicacion_id=? AND material=? AND codigo_material=?",
             (ubicacion_origen_id, material, codigo_material),
         ).fetchone()
@@ -603,7 +654,7 @@ def transferir_material(
             raise ValueError(f"Solo hay {unidades_origen} unidades disponibles de ese material.")
 
         stock_destino = conn.execute(
-            "SELECT id, palets, unidades_por_palet, unidades_sueltas "
+            "SELECT id, palets, unidades_por_palet, unidades_sueltas, espacios_por_palet "
             "FROM almacen_stock WHERE ubicacion_id=? AND material=? AND codigo_material=?",
             (ubicacion_destino_id, material, codigo_material),
         ).fetchone()
@@ -621,13 +672,19 @@ def transferir_material(
         ).fetchone()[0]
         ocupacion_anterior_material = (
             _espacios_ocupados(
-                stock_destino[1], stock_destino[2], stock_destino[3]
+                stock_destino[1],
+                stock_destino[2],
+                stock_destino[3],
+                stock_destino[4],
             )
             if stock_destino
             else 0
         )
         ocupacion_nueva_material = _espacios_ocupados(
-            nuevos_palets, upp_destino, nuevas_sueltas
+            nuevos_palets,
+            upp_destino,
+            nuevas_sueltas,
+            stock_destino[4] if stock_destino else stock_origen[4],
         )
         ocupacion_proyectada = (
             ocupacion_destino - ocupacion_anterior_material + ocupacion_nueva_material
@@ -649,6 +706,11 @@ def transferir_material(
             conn.execute("DELETE FROM almacen_stock WHERE id=?", (stock_origen[0],))
 
         if stock_destino:
+            if stock_destino[4] != stock_origen[4]:
+                raise ValueError(
+                    "El material ocupa distinto numero de espacios por palet en destino. "
+                    "Corrige las existencias para unificar la ocupacion antes del traslado."
+                )
             conn.execute(
                 "UPDATE almacen_stock SET palets=?, unidades_sueltas=?, actualizado=? WHERE id=?",
                 (nuevos_palets, nuevas_sueltas, ahora(), stock_destino[0]),
@@ -657,7 +719,8 @@ def transferir_material(
             conn.execute(
                 "INSERT INTO almacen_stock "
                 "(ubicacion_id, material, codigo_material, palets, unidades_por_palet, "
-                "unidades_sueltas, actualizado) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "unidades_sueltas, espacios_por_palet, actualizado) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     ubicacion_destino_id,
                     material,
@@ -665,6 +728,7 @@ def transferir_material(
                     nuevos_palets,
                     upp_destino,
                     nuevas_sueltas,
+                    stock_origen[4],
                     ahora(),
                 ),
             )
@@ -843,7 +907,7 @@ def obtener_ubicaciones_materiales(materiales):
     try:
         filas = conn.execute(
             "SELECT s.material, s.codigo_material, a.nombre, sec.nombre, u.codigo, "
-            "s.palets, s.unidades_por_palet, s.unidades_sueltas "
+            "s.palets, s.unidades_por_palet, s.unidades_sueltas, s.espacios_por_palet "
             "FROM almacen_stock s "
             "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
@@ -875,6 +939,7 @@ def obtener_ubicaciones_materiales(materiales):
                     "unidades_por_palet": fila[6],
                     "unidades_sueltas": fila[7],
                     "unidades_disponibles": fila[5] * fila[6] + fila[7],
+                    "espacios_por_palet": fila[8],
                 }
             )
     return resultado
