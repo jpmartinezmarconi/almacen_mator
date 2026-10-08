@@ -8,10 +8,23 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 6
     steps:
       - name: Ping Render health endpoint
         env:
           RENDER_APP_URL: ${{ secrets.RENDER_APP_URL }}
         run: |
           test -n "$RENDER_APP_URL"
-          curl --fail --silent --show-error --max-time 30 "$RENDER_APP_URL/?keepalive=1"
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --location \
+            --connect-timeout 15 \
+            --max-time 60 \
+            --retry 3 \
+            --retry-all-errors \
+            --retry-delay 10 \
+            --retry-max-time 240 \
+            --write-out "\nHTTP %{http_code} in %{time_total}s\n" \
+            "${RENDER_APP_URL%/}/?keepalive=1"

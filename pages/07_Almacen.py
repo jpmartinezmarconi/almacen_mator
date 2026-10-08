@@ -1,10 +1,12 @@
 import io
+import os
 import re
 import unicodedata
 
 import altair as alt
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from utils.almacen import (
     ajustar_stock,
@@ -24,6 +26,7 @@ from utils.almacen import (
 )
 from utils.branding import mostrar_logo
 from utils.db import init_db
+from utils.mapa_almacen import color_seccion, crear_html_mapa
 
 
 PASSWORDS_ALMACEN = {"ju@n", "s@r@", "j@rdi"}
@@ -330,7 +333,13 @@ with pestanas[0]:
                 y=alt.Y("Ocupacion (%):Q", title="Ocupacion (%)"),
                 color=alt.Color(
                     "Seccion:N",
-                    scale=alt.Scale(scheme="category20"),
+                    scale=alt.Scale(
+                        domain=resumen["Seccion"].tolist(),
+                        range=[
+                            color_seccion(nombre, resumen["Seccion"].tolist())
+                            for nombre in resumen["Seccion"]
+                        ],
+                    ),
                     legend=None,
                 ),
                 tooltip=[
@@ -767,3 +776,35 @@ with pestanas[5]:
                     st.rerun()
                 except ValueError as error:
                     st.error(str(error))
+
+st.divider()
+st.subheader("Mapa de ocupacion del almacen")
+nombre_almacen = next(fila[1] for fila in almacenes if fila[0] == almacen_id)
+if nombre_almacen.strip().casefold() != "nave 1":
+    st.info("El plano disponible corresponde a Nave 1. Selecciona esa nave para consultar el mapa.")
+else:
+    ruta_mapa = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "assets",
+        "mapa_nave1.xlsx",
+    )
+    mapa_html, secciones_sin_mapa = crear_html_mapa(
+        ruta_mapa,
+        secciones,
+        ubicaciones_por_seccion,
+        listar_stock_ubicaciones(almacen_id),
+    )
+    st.caption(
+        "Haz clic en una ubicacion del plano para abrir su contenido. "
+        "Las plazas ocupadas se rellenan con el color de su seccion; las libres quedan blancas."
+    )
+    components.html(
+        mapa_html,
+        height=max(700, min(1600, 360 + 45 * len(secciones))),
+        scrolling=True,
+    )
+    if secciones_sin_mapa:
+        st.warning(
+            "Estas secciones no tienen una ubicacion equivalente en el plano y no aparecen "
+            "coloreadas: " + ", ".join(secciones_sin_mapa)
+        )

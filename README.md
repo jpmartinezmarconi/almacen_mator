@@ -43,3 +43,15 @@ notificaciones de Telegram.
 El workflow `.github/workflows/render-keepalive.yml` consulta Render cada cinco
 minutos. Para activarlo, configura el secreto `RENDER_APP_URL` en GitHub con la
 URL publica completa del servicio, por ejemplo `https://tu-servicio.onrender.com`.
+El ping reintenta errores de red y tiempos de espera para dar margen a los
+arranques en frio. GitHub Actions puede retrasar las ejecuciones programadas,
+por lo que esto no garantiza que un servicio gratuito permanezca siempre activo.
+
+## Plano del almacen
+
+La pagina Almacen Virtual muestra el plano interactivo de Nave 1 al final. Los
+nombres de las secciones deben coincidir con las etiquetas del plano en
+`assets/mapa_nave1.xlsx`. El color identifica la misma familia de seccion que en
+la grafica; cada plaza ocupada se rellena y las libres quedan en blanco. Al
+hacer clic en una ubicacion se puede consultar su ocupacion, porcentaje y
+materiales registrados.
