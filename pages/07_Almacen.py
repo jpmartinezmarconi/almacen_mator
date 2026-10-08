@@ -3,7 +3,6 @@ import os
 import re
 import unicodedata
 
-import altair as alt
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -26,7 +25,7 @@ from utils.almacen import (
 )
 from utils.branding import mostrar_logo
 from utils.db import init_db
-from utils.mapa_almacen import color_seccion, crear_html_mapa
+from utils.mapa_almacen import crear_html_mapa
 
 
 PASSWORDS_ALMACEN = {"ju@n", "s@r@", "j@rdi"}
@@ -162,136 +161,9 @@ ubicaciones_por_seccion = listar_ubicaciones_por_secciones(
 )
 
 
-def mapa_seccion():
-    if not secciones:
-        st.info("Crea una seccion en la pestaña Configuracion para empezar.")
-        return
-
-    nombres = {fila[1]: fila for fila in secciones}
-    nombre_seccion = st.selectbox("Seccion del mapa", list(nombres), key="seccion_mapa")
-    seccion = nombres[nombre_seccion]
-    ubicaciones = ubicaciones_por_seccion.get(seccion[0], [])
-    por_posicion = {(fila[2], fila[3]): fila for fila in ubicaciones}
-    st.caption(
-        f"{seccion[2] or 'Sin descripcion'} | {seccion[3]} filas x {seccion[4]} columnas | "
-        f"{seccion[5]:g} m alto x {seccion[6]:g} m ancho x {seccion[7]:g} m fondo"
-    )
-
-    for fila in range(1, seccion[3] + 1):
-        columnas = st.columns(seccion[4])
-        for columna in range(1, seccion[4] + 1):
-            ubicacion = por_posicion.get((fila, columna))
-            with columnas[columna - 1]:
-                if not ubicacion:
-                    st.empty()
-                    continue
-                palets = int(ubicacion[9])
-                capacidad = int(ubicacion[4])
-                ocupada = palets >= capacidad
-                tipo = "primary" if ocupada else "secondary"
-                if st.button(
-                    f"{ubicacion[1]}\n{palets}/{capacidad} espacios",
-                    key=f"mapa_{ubicacion[0]}",
-                    type=tipo,
-                    use_container_width=True,
-                ):
-                    st.session_state.ubicacion_seleccionada = ubicacion[0]
-                st.caption("Ocupado" if ocupada else ("Libre" if palets == 0 else "Parcial"))
-
-    ubicacion_id = st.session_state.get("ubicacion_seleccionada")
-    ubicacion_seleccionada = next((fila for fila in ubicaciones if fila[0] == ubicacion_id), None)
-    if not ubicacion_seleccionada:
-        st.info("Haz clic en un espacio para consultar su contenido.")
-        return
-
-    st.subheader(f"Contenido de {ubicacion_seleccionada[1]}")
-    detalle = obtener_detalle_ubicacion(ubicacion_id)
-    if not detalle:
-        st.success("Este espacio esta vacio.")
-        return
-    df_detalle = filas_a_dataframe(
-        detalle,
-        [
-            "ID",
-            "Material",
-            "Codigo",
-            "Palets",
-            "Unidades por palet",
-            "Unidades sueltas",
-            "Actualizado",
-            "Espacios por palet",
-        ],
-    )
-    df_detalle["Unidades totales"] = (
-        df_detalle["Palets"] * df_detalle["Unidades por palet"] + df_detalle["Unidades sueltas"]
-    )
-    df_detalle["Espacios ocupados"] = (
-        df_detalle["Palets"]
-        + (
-            df_detalle["Unidades sueltas"]
-            + df_detalle["Unidades por palet"]
-            - 1
-        )
-        // df_detalle["Unidades por palet"]
-    ) * df_detalle["Espacios por palet"]
-    st.dataframe(df_detalle.drop(columns=["ID"]), use_container_width=True, hide_index=True)
-
-
-def resumen_por_seccion():
-    filas = []
-    materiales_por_seccion = {}
-    for stock in listar_stock_ubicaciones(almacen_id):
-        nombre_seccion = stock[2]
-        material = stock[3]
-        codigo_material = stock[4]
-        palets = stock[5]
-        unidades_por_palet = stock[6]
-        unidades_sueltas = stock[7]
-        unidades_totales = int(palets) * int(unidades_por_palet) + int(unidades_sueltas)
-        codigo = f" ({codigo_material})" if codigo_material else ""
-        nombre_material = f"{material}{codigo}"
-        existencias = materiales_por_seccion.setdefault(nombre_seccion, {})
-        existencias[nombre_material] = (
-            existencias.get(nombre_material, 0) + unidades_totales
-        )
-
-    for seccion in secciones:
-        ubicaciones = ubicaciones_por_seccion.get(seccion[0], [])
-        capacidad = sum(int(ubicacion[4]) for ubicacion in ubicaciones)
-        ocupados = sum(int(ubicacion[9]) for ubicacion in ubicaciones)
-        area_por_espacio = float(seccion[6]) * float(seccion[7])
-        espacios_libres = sum(
-            max(int(ubicacion[4]) - int(ubicacion[9]), 0)
-            for ubicacion in ubicaciones
-        )
-        area_restante = espacios_libres * area_por_espacio
-        porcentaje_ocupado = round(ocupados / capacidad * 100, 1) if capacidad else 0
-        filas.append(
-            {
-                "Seccion": seccion[1],
-                "Espacios": len(ubicaciones),
-                "Capacidad (espacios)": capacidad,
-                "Ocupados (espacios)": ocupados,
-                "Libres (espacios)": max(capacidad - ocupados, 0),
-                "Area restante (m2)": round(area_restante, 2),
-                "Porcentaje ocupado (%)": porcentaje_ocupado,
-                "Ocupacion (%)": porcentaje_ocupado,
-                "Materiales": "; ".join(
-                    f"{material}: {formato_numero(unidades)} unidades"
-                    for material, unidades in sorted(
-                        materiales_por_seccion.get(seccion[1], {}).items(),
-                        key=lambda fila: fila[0].casefold(),
-                    )
-                ) or "Sin materiales",
-                "Comentario": seccion[2] or "Sin comentario",
-            }
-        )
-    return pd.DataFrame(filas)
-
-
 pestanas = st.tabs(
     [
-        "Mapa y ocupacion",
+        "Mapa de ocupacion",
         "Movimientos",
         "Configuracion",
         "Importar Excel",
@@ -306,51 +178,36 @@ if not secciones:
     )
 
 with pestanas[0]:
-    mapa_seccion()
-    st.subheader("Ocupacion por seccion")
-    resumen = resumen_por_seccion()
-    if resumen.empty:
-        st.info("Todavia no hay secciones configuradas.")
+    st.subheader("Mapa de ocupacion del almacen")
+    nombre_almacen = next(fila[1] for fila in almacenes if fila[0] == almacen_id)
+    if nombre_almacen.strip().casefold() != "nave 1":
+        st.info("El plano disponible corresponde a Nave 1. Selecciona esa nave para consultar el mapa.")
     else:
-        resumen = resumen.sort_values(
-            "Seccion",
-            key=lambda nombres: nombres.str.casefold(),
-        ).reset_index(drop=True)
-        st.dataframe(
-            resumen.drop(columns=["Materiales", "Comentario"]),
-            use_container_width=True,
-            hide_index=True,
+        ruta_mapa = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "assets",
+            "mapa_nave1.xlsx",
         )
-        st.altair_chart(
-            alt.Chart(resumen)
-            .mark_bar()
-            .encode(
-                x=alt.X(
-                    "Seccion:N",
-                    sort=resumen["Seccion"].tolist(),
-                    title="Seccion",
-                ),
-                y=alt.Y("Ocupacion (%):Q", title="Ocupacion (%)"),
-                color=alt.Color(
-                    "Seccion:N",
-                    scale=alt.Scale(
-                        domain=resumen["Seccion"].tolist(),
-                        range=[
-                            color_seccion(nombre, resumen["Seccion"].tolist())
-                            for nombre in resumen["Seccion"]
-                        ],
-                    ),
-                    legend=None,
-                ),
-                tooltip=[
-                    alt.Tooltip("Seccion:N", title="Seccion"),
-                    alt.Tooltip("Ocupacion (%):Q", title="Ocupacion", format=".1f"),
-                    alt.Tooltip("Materiales:N", title="Materiales"),
-                    alt.Tooltip("Comentario:N", title="Comentario"),
-                ],
-            ),
-            use_container_width=True,
+        mapa_html, secciones_sin_mapa = crear_html_mapa(
+            ruta_mapa,
+            secciones,
+            ubicaciones_por_seccion,
+            listar_stock_ubicaciones(almacen_id),
         )
+        st.caption(
+            "Haz clic en una ubicacion del plano para abrir su contenido. "
+            "Las plazas ocupadas se rellenan con el color de su seccion; las libres quedan blancas."
+        )
+        components.html(
+            mapa_html,
+            height=max(700, min(1600, 360 + 45 * len(secciones))),
+            scrolling=True,
+        )
+        if secciones_sin_mapa:
+            st.warning(
+                "Estas secciones no tienen una ubicacion equivalente en el plano y no aparecen "
+                "coloreadas: " + ", ".join(secciones_sin_mapa)
+            )
 
 with pestanas[1]:
     if not secciones:
@@ -776,35 +633,3 @@ with pestanas[5]:
                     st.rerun()
                 except ValueError as error:
                     st.error(str(error))
-
-st.divider()
-st.subheader("Mapa de ocupacion del almacen")
-nombre_almacen = next(fila[1] for fila in almacenes if fila[0] == almacen_id)
-if nombre_almacen.strip().casefold() != "nave 1":
-    st.info("El plano disponible corresponde a Nave 1. Selecciona esa nave para consultar el mapa.")
-else:
-    ruta_mapa = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "assets",
-        "mapa_nave1.xlsx",
-    )
-    mapa_html, secciones_sin_mapa = crear_html_mapa(
-        ruta_mapa,
-        secciones,
-        ubicaciones_por_seccion,
-        listar_stock_ubicaciones(almacen_id),
-    )
-    st.caption(
-        "Haz clic en una ubicacion del plano para abrir su contenido. "
-        "Las plazas ocupadas se rellenan con el color de su seccion; las libres quedan blancas."
-    )
-    components.html(
-        mapa_html,
-        height=max(700, min(1600, 360 + 45 * len(secciones))),
-        scrolling=True,
-    )
-    if secciones_sin_mapa:
-        st.warning(
-            "Estas secciones no tienen una ubicacion equivalente en el plano y no aparecen "
-            "coloreadas: " + ", ".join(secciones_sin_mapa)
-        )

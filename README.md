@@ -49,9 +49,10 @@ por lo que esto no garantiza que un servicio gratuito permanezca siempre activo.
 
 ## Plano del almacen
 
-La pagina Almacen Virtual muestra el plano interactivo de Nave 1 al final. Los
+La primera pestana de Almacen Virtual muestra unicamente el plano interactivo
+de Nave 1. Los
 nombres de las secciones deben coincidir con las etiquetas del plano en
 `assets/mapa_nave1.xlsx`. El color identifica la misma familia de seccion que en
-la grafica; cada plaza ocupada se rellena y las libres quedan en blanco. Al
+la leyenda del mapa; cada plaza ocupada se rellena y las libres quedan en blanco. Al
 hacer clic en una ubicacion se puede consultar su ocupacion, porcentaje y
 materiales registrados.
