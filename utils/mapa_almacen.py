@@ -58,7 +58,7 @@ def familia_seccion(nombre):
         return "z"
     if re.fullmatch(r"S[1-7]", clave):
         return "s1"
-    if re.fullmatch(r"SP[1-4]", clave):
+    if re.fullmatch(r"SP[1-4](?:[A-D])?", clave):
         return "sp"
     if clave in ("ESTA", "ESTB"):
         return "est"
@@ -96,6 +96,22 @@ def _rango_celda(min_fila, min_columna, max_fila, max_columna, x, y):
 
 
 def _rango_marcador(ws, clave, celdas_marcador, x, y):
+    subdivision_sp = re.fullmatch(r"(SP[1-4])([A-D])", clave)
+    if subdivision_sp:
+        rangos_padre = _rango_marcador(
+            ws, subdivision_sp.group(1), celdas_marcador, x, y
+        )
+        indice = ord(subdivision_sp.group(2)) - ord("A")
+        return [
+            (
+                x1,
+                y1 + (y2 - y1) * indice / 4,
+                x2,
+                y1 + (y2 - y1) * (indice + 1) / 4,
+            )
+            for x1, y1, x2, y2 in rangos_padre
+        ]
+
     celdas = celdas_marcador.get(clave, [])
     if not celdas:
         return []
@@ -254,7 +270,11 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             (
                 candidato
                 for candidato in candidatos
-                if candidato in celdas_marcador or candidato in _ALIAS_GRUPOS
+                if (
+                    candidato in celdas_marcador
+                    or candidato in _ALIAS_GRUPOS
+                    or familia_seccion(candidato) is not None
+                )
             ),
             None,
         )
@@ -426,6 +446,24 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             'font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#17212b">'
             f"{texto}</text>"
         )
+
+    for numero in range(1, 5):
+        for letra in "ABCD":
+            marcador = f"SP{numero}{letra}"
+            for x1, y1, x2, y2 in _rango_marcador(
+                ws, marcador, celdas_marcador, x, y
+            ):
+                svg.append(
+                    f'<rect x="{x1:.2f}" y="{y1:.2f}" width="{x2 - x1:.2f}" '
+                    f'height="{y2 - y1:.2f}" fill="none" stroke="{PALETA_MAPA["sp"]}" '
+                    'stroke-width="3" pointer-events="none"/>'
+                )
+                svg.append(
+                    f'<text x="{(x1 + x2) / 2:.2f}" y="{(y1 + y2) / 2:.2f}" '
+                    'font-size="22" font-weight="bold" text-anchor="middle" '
+                    'dominant-baseline="middle" fill="#17212b" pointer-events="none">'
+                    f"{marcador}</text>"
+                )
     svg.append("</svg>")
 
     detalles = ['<section class="details"><h3>Contenido y ocupacion por ubicacion</h3>']

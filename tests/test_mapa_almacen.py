@@ -22,6 +22,8 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertEqual(color_seccion("S31"), PALETA_MAPA["s18"])
         self.assertEqual(color_seccion("ELE 3"), PALETA_MAPA["ele"])
         self.assertEqual(color_seccion("STOCK 8"), PALETA_MAPA["stock8"])
+        self.assertEqual(color_seccion("SP1A"), PALETA_MAPA["sp"])
+        self.assertEqual(color_seccion("sp4d"), PALETA_MAPA["sp"])
 
     def test_mapa_muestra_ocupacion_con_slots_libres_y_detalle_de_materiales(self):
         secciones = [(1, "S18", "", 1, 1, 2.5, 1.2, 1.2, 8, 1)]
@@ -41,7 +43,7 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertIn("Material A (SKU-A): 6 palets", contenido)
         self.assertIn("href=\"#detail-s18\"", contenido)
         self.assertEqual(contenido.count('class="slot"'), 8)
-        self.assertEqual(contenido.count('pointer-events="none"'), 6)
+        self.assertEqual(contenido.count('pointer-events="none"'), 38)
 
     def test_ubicaciones_libres_y_secciones_sin_correspondencia_se_indican(self):
         secciones = [
@@ -61,7 +63,74 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertIn("0 / 8 palets (0.0%)", contenido)
         self.assertIn("Sin materiales registrados.", contenido)
         self.assertEqual(contenido.count('class="slot"'), 8)
-        self.assertEqual(contenido.count('pointer-events="none"'), 0)
+        self.assertEqual(contenido.count('pointer-events="none"'), 32)
+
+    def test_mapa_muestra_las_dieciséis_subsecciones_sp(self):
+        nombres = [
+            f"SP{numero}{letra}"
+            for numero in range(1, 5)
+            for letra in "ABCD"
+        ]
+        secciones = [
+            (indice, nombre, "", 1, 1, 2.5, 1.2, 1.2, 2, 1)
+            for indice, nombre in enumerate(nombres, start=1)
+        ]
+        ubicaciones = {
+            indice: [
+                (
+                    indice * 10,
+                    f"{nombre}-R01-C01",
+                    1,
+                    1,
+                    2,
+                    2.5,
+                    1.2,
+                    1.2,
+                    1,
+                    1,
+                )
+            ]
+            for indice, nombre in enumerate(nombres, start=1)
+        }
+        stock = [
+            (
+                indice * 10,
+                f"{nombre}-R01-C01",
+                nombre,
+                f"Material {nombre}",
+                "",
+                1,
+                10,
+                0,
+                1,
+            )
+            for indice, nombre in enumerate(nombres, start=1)
+        ]
+
+        contenido, sin_mapa = crear_html_mapa(
+            self.ruta_mapa, secciones, ubicaciones, stock
+        )
+
+        self.assertEqual(sin_mapa, [])
+        for nombre in nombres:
+            self.assertIn(f">{nombre}</text>", contenido)
+            self.assertIn(f'href="#detail-{nombre.lower()}"', contenido)
+            self.assertIn(f"<summary>{nombre}:", contenido)
+        self.assertEqual(contenido.count('class="slot"'), 32)
+        self.assertEqual(contenido.count('pointer-events="none"'), 48)
+
+    def test_muestra_las_subsecciones_sp_aunque_aun_no_estan_configuradas(self):
+        contenido, sin_mapa = crear_html_mapa(self.ruta_mapa, [], {}, [])
+        nombres = [
+            f"SP{numero}{letra}"
+            for numero in range(1, 5)
+            for letra in "ABCD"
+        ]
+
+        self.assertEqual(sin_mapa, [])
+        for nombre in nombres:
+            self.assertIn(f">{nombre}</text>", contenido)
+        self.assertEqual(contenido.count('pointer-events="none"'), 32)
 
 
 if __name__ == "__main__":
