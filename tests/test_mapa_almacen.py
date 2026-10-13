@@ -1,6 +1,8 @@
 import os
 import unittest
 
+from openpyxl import load_workbook
+
 from utils.mapa_almacen import PALETA_MAPA, color_seccion, crear_html_mapa
 
 
@@ -10,6 +12,14 @@ class MapaAlmacenTest(unittest.TestCase):
             os.path.dirname(os.path.dirname(__file__)),
             "assets",
             "mapa_nave1.xlsx",
+        )
+
+    def test_etiquetas_verticales_de_columna_c_son_secuenciales(self):
+        ws = load_workbook(self.ruta_mapa, data_only=True).active
+
+        self.assertEqual(
+            [ws[f"C{fila}"].value for fila in range(2, 5)],
+            ["C1", "C2", "C3"],
         )
 
     def test_colores_del_mapa_coinciden_por_familia_y_por_stock(self):
