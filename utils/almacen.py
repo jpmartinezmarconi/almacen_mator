@@ -367,8 +367,8 @@ def ajustar_stock(
         or unidades_por_palet < 1
     ):
         raise ValueError("Las cantidades no pueden ser negativas y las unidades por palet deben ser al menos 1.")
-    if espacios_por_palet is not None and espacios_por_palet < 1:
-        raise ValueError("Los espacios ocupados por palet deben ser al menos 1.")
+    if espacios_por_palet is not None and espacios_por_palet < 0:
+        raise ValueError("Los espacios ocupados por palet no pueden ser negativos.")
 
     conn = get_conn()
     try:
@@ -490,8 +490,8 @@ def registrar_movimiento(
         or unidades_por_palet < 1
     ):
         raise ValueError("Las cantidades no pueden ser negativas.")
-    if espacios_por_palet < 1:
-        raise ValueError("Los espacios ocupados por palet deben ser al menos 1.")
+    if espacios_por_palet < 0:
+        raise ValueError("Los espacios ocupados por palet no pueden ser negativos.")
     if palets == 0 and unidades_sueltas == 0:
         raise ValueError("Indica al menos un palet o una unidad.")
 
@@ -519,11 +519,19 @@ def registrar_movimiento(
         if tipo == "entrada":
             if stock:
                 upp = stock[2]
+                espacios_stock = stock[4]
+                if espacios_por_palet == 0 and stock[4] > 0:
+                    if stock[1] > 0:
+                        raise ValueError(
+                            "Este material ya tiene palets en la ubicacion. "
+                            "Corrige sus existencias antes de cambiar a 0 espacios por palet."
+                        )
+                    espacios_stock = 0
                 nueva_ocupacion_material = _espacios_ocupados(
                     stock[1] + palets,
                     upp,
                     stock[3] + unidades_sueltas,
-                    stock[4],
+                    espacios_stock,
                 )
                 ocupacion_material_actual = _espacios_ocupados(
                     stock[1], upp, stock[3], stock[4]
@@ -547,8 +555,9 @@ def registrar_movimiento(
                 nuevo_sueltas = stock[3] + unidades_sueltas
                 upp = stock[2]
                 conn.execute(
-                    "UPDATE almacen_stock SET palets=?, unidades_sueltas=?, actualizado=? WHERE id=?",
-                    (nuevo_palets, nuevo_sueltas, ahora(), stock[0]),
+                    "UPDATE almacen_stock SET palets=?, unidades_sueltas=?, "
+                    "espacios_por_palet=?, actualizado=? WHERE id=?",
+                    (nuevo_palets, nuevo_sueltas, espacios_stock, ahora(), stock[0]),
                 )
             else:
                 upp = unidades_por_palet

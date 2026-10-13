@@ -53,8 +53,8 @@ if st.button("Cerrar sesión de Almacen Virtual"):
 
 st.caption(
     "Selecciona una nave, crea secciones con su capacidad en palets y registra "
-    "existencias o traslados. Cada pallet con existencias ocupa suelo, aunque "
-    "solo queden unidades sueltas."
+    "existencias o traslados. Las unidades guardadas en huecos de estanteria que "
+    "no cuentan como espacios de palet pueden registrarse con 0 espacios ocupados."
 )
 
 consulta_material = st.text_input(
@@ -250,17 +250,24 @@ with pestanas[1]:
             col1, col2, col3, col4 = st.columns(4)
             palets = col1.number_input("Palets", min_value=0, step=1, value=0)
             unidades_por_palet = col2.number_input("Unidades por palet", min_value=1, step=1, value=1)
-            unidades_sueltas = col3.number_input("Unidades sueltas", min_value=0, step=1, value=0)
+            unidades_sueltas = col3.number_input(
+                "Unidades sueltas",
+                min_value=0,
+                step=1,
+                value=0,
+                help="Para guardar unidades en huecos de estanteria, pon aqui la cantidad y deja Palets en 0.",
+            )
             st.caption(
-                "Si cada palet ocupa el hueco de varios, indícalo como espacios por palet."
+                "Para unidades en huecos de estanteria que no equivalen a espacios de palet, "
+                "indica 0 en espacios ocupados por palet."
             )
             espacios_por_palet = (
                 col4.number_input(
                     "Espacios ocupados por palet",
-                    min_value=1,
+                    min_value=0,
                     step=1,
                     value=1,
-                    help="Un palet puede ocupar varios espacios del mapa.",
+                    help="Usa 0 para unidades almacenadas en estanteria sin ocupar plazas de palet.",
                 )
                 if tipo == "entrada"
                 else 1
@@ -335,9 +342,10 @@ with pestanas[1]:
                 )
                 espacios_por_palet_corregidos = st.number_input(
                     "Espacios ocupados por palet",
-                    min_value=1,
+                    min_value=0,
                     step=1,
                     value=int(stock_seleccionado[8]),
+                    help="Usa 0 si las unidades estan en huecos de estanteria y no ocupan plazas de palet.",
                 )
                 guardar_ajuste = st.form_submit_button(
                     "Guardar cantidades corregidas", type="primary"
@@ -437,7 +445,8 @@ with pestanas[3]:
     st.subheader("Importar movimientos desde Excel o CSV")
     st.caption(
         "Columnas: ubicacion, material, palets, unidades_por_palet, unidades_sueltas, "
-        "tipo_movimiento, codigo_material, referencia y albaran_id."
+        "espacios_por_palet, tipo_movimiento, codigo_material, referencia y albaran_id. "
+        "Usa espacios_por_palet=0 para unidades en huecos de estanteria."
     )
     plantilla = pd.DataFrame(
         [{
@@ -516,6 +525,12 @@ with pestanas[3]:
                                     f"ubicacion desconocida: {codigo_ubicacion}. "
                                     f"Ejemplos disponibles: {ejemplos_ubicaciones}"
                                 )
+                            espacios_importados = fila.get("espacios_por_palet", 1)
+                            espacios_importados = (
+                                int(float(espacios_importados))
+                                if str(espacios_importados).strip()
+                                else 1
+                            )
                             registrar_movimiento(
                                 str(fila.get("tipo_movimiento", "entrada") or "entrada"),
                                 ubicaciones[codigo_normalizado],
@@ -526,7 +541,7 @@ with pestanas[3]:
                                 int(float(fila.get("unidades_sueltas", 0) or 0)),
                                 str(fila.get("referencia", "")),
                                 int(float(fila["albaran_id"])) if str(fila.get("albaran_id", "")).strip() else None,
-                                int(float(fila.get("espacios_por_palet", 1) or 1)),
+                                espacios_importados,
                             )
                             importados += 1
                         except (ValueError, TypeError) as error:

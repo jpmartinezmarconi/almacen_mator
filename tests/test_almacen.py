@@ -228,6 +228,88 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
         self.assertEqual(fila, (1, 3))
         self.assertEqual(ocupacion, 3)
 
+    def test_unidades_en_estanteria_pueden_ocupar_cero_espacios_de_palet(self):
+        with conectar_db(self.db_path) as conn:
+            conn.execute(
+                "UPDATE almacen_ubicaciones SET capacidad_palets=0 WHERE id=2"
+            )
+
+        registrar_movimiento(
+            "entrada",
+            2,
+            "Caja pequeña",
+            "SKU-C",
+            0,
+            1,
+            25,
+            espacios_por_palet=0,
+        )
+
+        with conectar_db(self.db_path) as conn:
+            fila = conn.execute(
+                "SELECT palets, unidades_sueltas, espacios_por_palet "
+                "FROM almacen_stock WHERE ubicacion_id=2"
+            ).fetchone()
+            ocupacion = conn.execute(
+                "SELECT " + OCUPACION_POR_STOCK_SQL.format(alias="s")
+                + " FROM almacen_stock s WHERE s.ubicacion_id=2"
+            ).fetchone()[0]
+        self.assertEqual(fila, (0, 25, 0))
+        self.assertEqual(ocupacion, 0)
+
+    def test_entrada_cambia_existencias_sueltas_a_cero_espacios_de_palet(self):
+        self._guardar_stock(2, 10)
+
+        registrar_movimiento(
+            "entrada",
+            2,
+            "Material A",
+            "",
+            0,
+            1,
+            10,
+            espacios_por_palet=0,
+        )
+
+        with conectar_db(self.db_path) as conn:
+            fila = conn.execute(
+                "SELECT palets, unidades_sueltas, espacios_por_palet "
+                "FROM almacen_stock WHERE ubicacion_id=2"
+            ).fetchone()
+            ocupacion = conn.execute(
+                "SELECT " + OCUPACION_POR_STOCK_SQL.format(alias="s")
+                + " FROM almacen_stock s WHERE s.ubicacion_id=2"
+            ).fetchone()[0]
+        self.assertEqual(fila, (0, 20, 0))
+        self.assertEqual(ocupacion, 0)
+
+    def test_no_mezcla_palets_con_unidades_sin_ocupacion_en_la_misma_existencia(self):
+        self._guardar_stock(2, 10)
+        with conectar_db(self.db_path) as conn:
+            conn.execute(
+                "UPDATE almacen_stock SET palets=1, unidades_sueltas=0 "
+                "WHERE ubicacion_id=2"
+            )
+
+        with self.assertRaisesRegex(ValueError, "ya tiene palets"):
+            registrar_movimiento(
+                "entrada",
+                2,
+                "Material A",
+                "",
+                0,
+                1,
+                1,
+                espacios_por_palet=0,
+            )
+
+        with conectar_db(self.db_path) as conn:
+            fila = conn.execute(
+                "SELECT palets, unidades_sueltas, espacios_por_palet "
+                "FROM almacen_stock WHERE ubicacion_id=2"
+            ).fetchone()
+        self.assertEqual(fila, (1, 0, 1))
+
     def test_ajuste_permite_configurar_huella_de_un_material_existente(self):
         self._guardar_stock(2, 10)
 
@@ -243,6 +325,23 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
             ).fetchone()[0]
         self.assertEqual(fila, (1, 3))
         self.assertEqual(ocupacion, 3)
+
+    def test_ajuste_permite_cero_espacios_de_palet(self):
+        self._guardar_stock(2, 10)
+
+        ajustar_stock(2, 2, "Material A", "", 0, 10, 10, 0)
+
+        with conectar_db(self.db_path) as conn:
+            fila = conn.execute(
+                "SELECT palets, unidades_sueltas, espacios_por_palet "
+                "FROM almacen_stock WHERE ubicacion_id=2"
+            ).fetchone()
+            ocupacion = conn.execute(
+                "SELECT " + OCUPACION_POR_STOCK_SQL.format(alias="s")
+                + " FROM almacen_stock s WHERE s.ubicacion_id=2"
+            ).fetchone()[0]
+        self.assertEqual(fila, (0, 10, 0))
+        self.assertEqual(ocupacion, 0)
 
     def test_migracion_conserva_stock_existente_con_un_espacio_por_palet(self):
         ruta_db = os.path.join(self.directorio.name, "legacy.db")
@@ -310,6 +409,23 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
             ).fetchone()[0]
         self.assertEqual(destino, (3,))
         self.assertEqual(ocupacion, 3)
+
+    def test_traslado_conserva_cero_espacios_de_palet(self):
+        self._guardar_stock(1, 10, espacios=0)
+
+        transferir_material(1, 2, "Material A", "", 0, 5)
+
+        with conectar_db(self.db_path) as conn:
+            destino = conn.execute(
+                "SELECT palets, unidades_sueltas, espacios_por_palet "
+                "FROM almacen_stock WHERE ubicacion_id=2"
+            ).fetchone()
+            ocupacion = conn.execute(
+                "SELECT " + OCUPACION_POR_STOCK_SQL.format(alias="s")
+                + " FROM almacen_stock s WHERE s.ubicacion_id=2"
+            ).fetchone()[0]
+        self.assertEqual(destino, (0, 5, 0))
+        self.assertEqual(ocupacion, 0)
 
 
 if __name__ == "__main__":
