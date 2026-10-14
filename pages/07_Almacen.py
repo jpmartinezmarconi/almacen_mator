@@ -17,6 +17,7 @@ from utils.almacen import (
     listar_secciones,
     listar_stock_ubicaciones,
     listar_ubicaciones_por_secciones,
+    migrar_ubicaciones_estanteria,
     obtener_detalle_ubicacion,
     obtener_movimientos,
     registrar_movimiento,
@@ -46,6 +47,11 @@ if not st.session_state.get("almacen_virtual_autorizado"):
     st.stop()
 
 init_db()
+try:
+    migrar_ubicaciones_estanteria()
+except ValueError as error:
+    st.error(str(error))
+    st.stop()
 st.title("Almacen Virtual")
 if st.button("Cerrar sesión de Almacen Virtual"):
     st.session_state.almacen_virtual_autorizado = False
@@ -121,6 +127,12 @@ almacen_id = st.selectbox(
 
 def formato_numero(valor):
     return f"{int(valor):,}".replace(",", ".")
+
+
+def etiqueta_ubicacion(codigo, nombre_seccion):
+    if clave_ubicacion(nombre_seccion) in ("ESTA", "ESTB"):
+        return codigo
+    return f"{codigo} ({nombre_seccion})"
 
 
 def filas_a_dataframe(filas, columnas):
@@ -218,7 +230,10 @@ with pestanas[1]:
             for ubicacion in ubicaciones_por_seccion.get(seccion[0], []):
                 ubicaciones_totales.append((ubicacion[1], ubicacion[0], seccion[1]))
         ubicaciones_totales.sort()
-        ubicacion_labels = [f"{codigo} ({seccion})" for codigo, _id, seccion in ubicaciones_totales]
+        ubicacion_labels = [
+            etiqueta_ubicacion(codigo, seccion)
+            for codigo, _id, seccion in ubicaciones_totales
+        ]
         seleccion = st.selectbox("Espacio", ubicacion_labels, key="movimiento_ubicacion")
         ubicacion_id = ubicaciones_totales[ubicacion_labels.index(seleccion)][1]
         detalle = obtener_detalle_ubicacion(ubicacion_id)
@@ -309,7 +324,7 @@ with pestanas[1]:
                 format_func=lambda indice: (
                     f"{stock_para_ajuste[indice][3]}"
                     f"{' (' + stock_para_ajuste[indice][4] + ')' if stock_para_ajuste[indice][4] else ''}"
-                    f" | {stock_para_ajuste[indice][2]} / {stock_para_ajuste[indice][1]}"
+                    f" | {etiqueta_ubicacion(stock_para_ajuste[indice][2], stock_para_ajuste[indice][1])}"
                     f" | {stock_para_ajuste[indice][5]} palets x "
                     f"{stock_para_ajuste[indice][6]} + {stock_para_ajuste[indice][7]} sueltas"
                     f" | {stock_para_ajuste[indice][8]} espacios/palet"
@@ -392,7 +407,17 @@ with pestanas[2]:
             "Capacidad de la seccion (espacios de palet)",
             min_value=1,
             step=1,
-            value=int(valores[8]),
+            value=(
+                8
+                if clave_ubicacion(nombre) in ("ESTA", "ESTB")
+                else int(valores[8])
+            ),
+            disabled=clave_ubicacion(nombre) in ("ESTA", "ESTB"),
+            help=(
+                "EST A y EST B tienen cuatro niveles con capacidad de dos palets cada uno."
+                if clave_ubicacion(nombre) in ("ESTA", "ESTB")
+                else None
+            ),
         )
         with st.expander("Dimensiones (opcional)"):
             alto_m = st.number_input("Alto (m)", min_value=0.1, step=0.1, value=float(valores[5]))
@@ -401,10 +426,15 @@ with pestanas[2]:
         guardar_config = st.form_submit_button("Guardar seccion", type="primary")
     if guardar_config:
         try:
+            capacidad_total = (
+                8
+                if clave_ubicacion(nombre) in ("ESTA", "ESTB")
+                else int(capacidad_palets)
+            )
             guardar_seccion(
                 nombre,
                 descripcion,
-                1,
+                4 if clave_ubicacion(nombre) in ("ESTA", "ESTB") else 1,
                 1,
                 float(alto_m),
                 float(ancho_m),
@@ -414,7 +444,7 @@ with pestanas[2]:
                 almacen_id,
             )
             st.success(
-                f"Seccion guardada con capacidad para {int(capacidad_palets)} espacios de palet."
+                f"Seccion guardada con capacidad para {capacidad_total} espacios de palet."
             )
             st.rerun()
         except ValueError as error:
@@ -591,7 +621,7 @@ with pestanas[5]:
             format_func=lambda indice: (
                 f"{stock_origen[indice][3]}"
                 f"{' (' + stock_origen[indice][4] + ')' if stock_origen[indice][4] else ''}"
-                f" | {stock_origen[indice][2]} / {stock_origen[indice][1]}"
+                f" | {etiqueta_ubicacion(stock_origen[indice][2], stock_origen[indice][1])}"
                 f" | {stock_origen[indice][5]} palets + {stock_origen[indice][7]} sueltas"
             ),
         )
@@ -612,7 +642,7 @@ with pestanas[5]:
                 "Ubicacion de destino",
                 options=[ubicacion[0] for ubicacion in ubicaciones_destino],
                 format_func=lambda seleccionado: next(
-                    f"{ubicacion[1]} ({ubicacion[2]})"
+                    etiqueta_ubicacion(ubicacion[1], ubicacion[2])
                     for ubicacion in ubicaciones_destino
                     if ubicacion[0] == seleccionado
                 ),

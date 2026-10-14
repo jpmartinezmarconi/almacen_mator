@@ -182,6 +182,201 @@ def obtener_catalogo_materiales():
         conn.close()
 
 
+def migrar_ubicaciones_estanteria():
+    conn = get_conn()
+    try:
+        nave = conn.execute(
+            "SELECT id FROM almacenes WHERE UPPER(TRIM(nombre))='NAVE 1'"
+        ).fetchone()
+        if not nave:
+            return
+
+        for nombre in ("EST A", "EST B"):
+            seccion = conn.execute(
+                "SELECT id FROM almacen_secciones "
+                "WHERE almacen_id=? AND UPPER(TRIM(nombre))=? AND activa=1",
+                (nave[0], nombre),
+            ).fetchone()
+            if not seccion:
+                continue
+
+            seccion_id = seccion[0]
+            codigos = [f"{nombre}{nivel}" for nivel in range(1, 5)]
+            ubicaciones = conn.execute(
+                "SELECT id, codigo FROM almacen_ubicaciones "
+                "WHERE seccion_id=? AND activa=1",
+                (seccion_id,),
+            ).fetchall()
+            por_codigo = {fila[1]: fila[0] for fila in ubicaciones}
+            legacy = [fila for fila in ubicaciones if fila[1] not in codigos]
+            if all(codigo in por_codigo for codigo in codigos) and not legacy:
+                for nivel, codigo in enumerate(codigos, start=1):
+                    conn.execute(
+                        "UPDATE almacen_ubicaciones SET fila=?, columna=1, "
+                        "capacidad_palets=2 WHERE id=?",
+                        (nivel, por_codigo[codigo]),
+                    )
+                conn.execute(
+                    "UPDATE almacen_secciones SET filas=4, columnas=1, "
+                    "capacidad_palets=8 WHERE id=?",
+                    (seccion_id,),
+                )
+                continue
+
+            ids_niveles_existentes = [
+                por_codigo[codigo] for codigo in codigos if codigo in por_codigo
+            ]
+            if legacy and ids_niveles_existentes:
+                placeholders = ", ".join("?" for _ in ids_niveles_existentes)
+                stock_niveles = conn.execute(
+                    "SELECT 1 FROM almacen_stock "
+                    f"WHERE ubicacion_id IN ({placeholders}) LIMIT 1",
+                    tuple(ids_niveles_existentes),
+                ).fetchone()
+                if stock_niveles:
+                    raise ValueError(
+                        f"{nombre} tiene stock tanto en ubicaciones antiguas como en "
+                        "niveles nuevos; requiere revisión antes de migrar."
+                    )
+
+            stock_legacy = conn.execute(
+                "SELECT s.id, s.material, s.codigo_material, s.palets, "
+                "s.unidades_por_palet, s.unidades_sueltas, s.espacios_por_palet "
+                "FROM almacen_stock s JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
+                "WHERE u.seccion_id=? AND u.activa=1 AND u.codigo NOT IN (?, ?, ?, ?) "
+                "ORDER BY u.id, s.id",
+                (seccion_id, *codigos),
+            ).fetchall()
+            total_palets = sum(max(0, int(fila[3] or 0)) for fila in stock_legacy)
+            if total_palets > 8:
+                raise ValueError(
+                    f"{nombre} tiene {total_palets} palets registrados, pero sus "
+                    "cuatro niveles admiten 8. Revisa las existencias antes de migrar."
+                )
+
+            for nivel, codigo in enumerate(codigos, start=1):
+                ubicacion_id = por_codigo.get(codigo)
+                if ubicacion_id is None:
+                    conn.execute(
+                        "INSERT INTO almacen_ubicaciones "
+                        "(seccion_id, almacen_id, codigo, fila, columna, capacidad_palets, "
+                        "alto_m, ancho_m, fondo_m, activa) "
+                        "VALUES (?, ?, ?, ?, 1, 2, 2.5, 1.2, 1.2, 1)",
+                        (seccion_id, nave[0], codigo, nivel),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE almacen_ubicaciones SET fila=?, columna=1, "
+                        "capacidad_palets=2, activa=1 WHERE id=?",
+                        (nivel, ubicacion_id),
+                    )
+
+            agrupado = {}
+            for fila in stock_legacy:
+                clave = (fila[1], fila[2])
+                cantidades = agrupado.setdefault(
+                    clave,
+                    {
+                        "palets": 0,
+                        "unidades_por_palet": int(fila[4] or 1),
+                        "unidades_sueltas": 0,
+                        "espacios_por_palet": int(fila[6] or 0),
+                    },
+                )
+                if (
+                    cantidades["unidades_por_palet"] != int(fila[4] or 1)
+                    or cantidades["espacios_por_palet"] != int(fila[6] or 0)
+                ):
+                    raise ValueError(
+                        f"Las existencias de {fila[1]} en {nombre} tienen "
+                        "configuraciones distintas y requieren revisión manual."
+                    )
+                cantidades["palets"] += int(fila[3] or 0)
+                cantidades["unidades_sueltas"] += int(fila[5] or 0)
+
+            niveles = [{} for _ in codigos]
+            palets_por_nivel = [0, 0, 0, 0]
+            siguiente_nivel_suelto = 0
+            for (material, codigo_material), cantidades in agrupado.items():
+                palets_restantes = cantidades["palets"]
+                niveles_usados = []
+                for nivel in range(4):
+                    asignados = min(2 - palets_por_nivel[nivel], palets_restantes)
+                    if asignados:
+                        niveles_usados.append((nivel, asignados))
+                        palets_por_nivel[nivel] += asignados
+                        palets_restantes -= asignados
+                    if palets_restantes == 0:
+                        break
+                if palets_restantes:
+                    raise ValueError(
+                        f"No hay capacidad para repartir las existencias de "
+                        f"{material} en {nombre}."
+                    )
+                if not niveles_usados:
+                    niveles_usados = [(siguiente_nivel_suelto % 4, 0)]
+                    siguiente_nivel_suelto += 1
+
+                for nivel, palets_nivel in niveles_usados:
+                    sueltas_nivel = (
+                        cantidades["unidades_sueltas"]
+                        if nivel == niveles_usados[-1][0]
+                        else 0
+                    )
+                    niveles[nivel][(material, codigo_material)] = (
+                        palets_nivel,
+                        cantidades["unidades_por_palet"],
+                        sueltas_nivel,
+                        cantidades["espacios_por_palet"],
+                    )
+
+            for nivel, codigo in enumerate(codigos):
+                ubicacion_id = conn.execute(
+                    "SELECT id FROM almacen_ubicaciones "
+                    "WHERE seccion_id=? AND codigo=? AND activa=1",
+                    (seccion_id, codigo),
+                ).fetchone()[0]
+                for (material, codigo_material), cantidades in niveles[nivel].items():
+                    conn.execute(
+                        "INSERT INTO almacen_stock "
+                        "(ubicacion_id, material, codigo_material, palets, "
+                        "unidades_por_palet, unidades_sueltas, espacios_por_palet, actualizado) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            ubicacion_id,
+                            material,
+                            codigo_material,
+                            *cantidades[:3],
+                            cantidades[3],
+                            ahora(),
+                        ),
+                    )
+
+            ids_legacy = [fila[0] for fila in legacy]
+            if ids_legacy:
+                placeholders = ", ".join("?" for _ in ids_legacy)
+                conn.execute(
+                    f"DELETE FROM almacen_stock WHERE ubicacion_id IN ({placeholders})",
+                    tuple(ids_legacy),
+                )
+                conn.execute(
+                    f"UPDATE almacen_ubicaciones SET activa=0 WHERE id IN ({placeholders})",
+                    tuple(ids_legacy),
+                )
+            conn.execute(
+                "UPDATE almacen_secciones SET filas=4, columnas=1, capacidad_palets=8 "
+                "WHERE id=?",
+                (seccion_id,),
+            )
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def guardar_seccion(
     nombre,
     descripcion,
@@ -197,6 +392,9 @@ def guardar_seccion(
     nombre = nombre.strip()
     if not nombre:
         raise ValueError("El nombre de la seccion es obligatorio.")
+    es_estanteria = nombre.upper() in ("EST A", "EST B")
+    if es_estanteria:
+        filas, columnas, capacidad_palets = 4, 1, 8
     if min(filas, columnas, capacidad_palets) < 1:
         raise ValueError("Filas, columnas y capacidad deben ser mayores que cero.")
     if min(alto_m, ancho_m, fondo_m) <= 0:
@@ -261,7 +459,12 @@ def guardar_seccion(
         prefijo = prefijo_existente or re.sub(r"[^A-Za-z0-9]+", "-", nombre).strip("-").upper() or "SEC"
         for fila in range(1, filas + 1):
             for columna in range(1, columnas + 1):
-                codigo = f"{prefijo}-R{fila:02d}-C{columna:02d}"
+                codigo = (
+                    f"{nombre}{fila}"
+                    if es_estanteria
+                    else f"{prefijo}-R{fila:02d}-C{columna:02d}"
+                )
+                capacidad_ubicacion = 2 if es_estanteria else capacidad_palets
                 existente = conn.execute(
                     "SELECT id FROM almacen_ubicaciones WHERE seccion_id=? AND codigo = ?",
                     (seccion_id, codigo),
@@ -270,14 +473,33 @@ def guardar_seccion(
                     conn.execute(
                         "UPDATE almacen_ubicaciones SET seccion_id=?, fila=?, columna=?, "
                         "capacidad_palets=?, alto_m=?, ancho_m=?, fondo_m=?, activa=1 WHERE id=?",
-                        (seccion_id, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m, existente[0]),
+                        (
+                            seccion_id,
+                            fila,
+                            columna,
+                            capacidad_ubicacion,
+                            alto_m,
+                            ancho_m,
+                            fondo_m,
+                            existente[0],
+                        ),
                     )
                 else:
                     conn.execute(
                         "INSERT INTO almacen_ubicaciones "
                         "(seccion_id, almacen_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (seccion_id, almacen_id, codigo, fila, columna, capacidad_palets, alto_m, ancho_m, fondo_m),
+                        (
+                            seccion_id,
+                            almacen_id,
+                            codigo,
+                            fila,
+                            columna,
+                            capacidad_ubicacion,
+                            alto_m,
+                            ancho_m,
+                            fondo_m,
+                        ),
                     )
         conn.commit()
         return seccion_id

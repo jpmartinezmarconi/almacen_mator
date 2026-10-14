@@ -61,12 +61,25 @@ class MapaAlmacenTest(unittest.TestCase):
             (2, "EST B", "", 1, 1, 2.5, 1.2, 1.2, 8, 1),
         ]
         ubicaciones = {
-            1: [(10, "EST-A-R01-C01", 1, 1, 8, 2.5, 1.2, 1.2, 1, 3)],
-            2: [(20, "EST-B-R01-C01", 1, 1, 8, 2.5, 1.2, 1.2, 1, 2)],
+            1: [
+                (11, "EST A1", 1, 1, 2, 2.5, 1.2, 1.2, 1, 0),
+                (12, "EST A2", 2, 1, 2, 2.5, 1.2, 1.2, 1, 0),
+                (13, "EST A3", 3, 1, 2, 2.5, 1.2, 1.2, 1, 0),
+                (14, "EST A4", 4, 1, 2, 2.5, 1.2, 1.2, 1, 0),
+            ],
+            2: [
+                (21, "EST B1", 1, 1, 2, 2.5, 1.2, 1.2, 1, 0),
+                (22, "EST B2", 2, 1, 2, 2.5, 1.2, 1.2, 1, 2),
+                (23, "EST B3", 3, 1, 2, 2.5, 1.2, 1.2, 1, 0),
+                (24, "EST B4", 4, 1, 2, 2.5, 1.2, 1.2, 1, 0),
+            ],
         }
+        stock = [
+            (13, "EST A3", "EST B", "Caja pequeña", "SKU-C", 0, 10, 25, 0)
+        ]
 
         contenido, sin_mapa = crear_html_mapa(
-            self.ruta_mapa, secciones, ubicaciones, []
+            self.ruta_mapa, secciones, ubicaciones, stock
         )
 
         self.assertEqual(sin_mapa, [])
@@ -78,8 +91,11 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertNotIn(">EST A</text>", contenido)
         self.assertNotIn(">EST B</text>", contenido)
         self.assertEqual(contenido.count('class="slot"'), 16)
-        self.assertIn("3 / 8 palets (37.5%)", contenido)
+        self.assertIn("0 / 8 palets (0.0%)", contenido)
         self.assertIn("2 / 8 palets (25.0%)", contenido)
+        self.assertIn('href="#detail-estaesta3"', contenido)
+        self.assertIn("<li>Caja pequeña (SKU-C): 0 palets, 25 unidades sueltas", contenido)
+        self.assertEqual(contenido.count('class="stock-indicator"'), 1)
 
     def test_ubicaciones_libres_y_secciones_sin_correspondencia_se_indican(self):
         secciones = [

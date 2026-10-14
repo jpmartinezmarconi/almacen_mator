@@ -264,8 +264,7 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
 
     inventario_por_ubicacion = {}
     for fila in stock:
-        clave = (_normalizar(fila[2]), _normalizar(fila[1]))
-        inventario_por_ubicacion.setdefault(clave, []).append(fila)
+        inventario_por_ubicacion.setdefault(fila[0], []).append(fila)
 
     datos_por_marcador = {}
     secciones_sin_mapa = []
@@ -303,10 +302,7 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             dato["capacidad"] += capacidad
             dato["ocupados"] += ocupados
             codigo = str(ubicacion[1])
-            materiales = inventario_por_ubicacion.get(
-                (_normalizar(nombre), _normalizar(codigo)),
-                [],
-            )
+            materiales = inventario_por_ubicacion.get(ubicacion[0], [])
             dato["ubicaciones"].append(
                 {
                     "codigo": codigo,
@@ -356,7 +352,19 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
                 (str(celda.value) for celda in celdas_marcador.get(marcador, [])),
                 dato["nombre"],
             )
-        ranuras = _subdividir_rangos(rangos, dato["capacidad"])
+        if marcador in ("ESTA", "ESTB") and len(rangos) == len(dato["ubicaciones"]):
+            ranuras = [
+                (ranura, ubicacion)
+                for rango, ubicacion in zip(rangos, dato["ubicaciones"])
+                for ranura in _subdividir_rangos(
+                    [rango], ubicacion["capacidad"]
+                )
+            ]
+        else:
+            ranuras = [
+                (ranura, None)
+                for ranura in _subdividir_rangos(rangos, dato["capacidad"])
+            ]
         familia = familia_seccion(marcador) or familia_seccion(dato["nombre"])
         color = color_seccion(marcador, [dato["nombre"]])
         ocupados = dato["ocupados"]
@@ -376,19 +384,44 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             else:
                 tooltip.append(f'{ubicacion["codigo"]}: sin materiales')
         title = html.escape(" | ".join(tooltip))
-        for indice, (x1, y1, x2, y2) in enumerate(ranuras):
-            # Capacity is distributed over the physical bays; extra spaces split a bay.
-            capacidad_bahia = (dato["capacidad"] + len(ranuras) - indice - 1) // len(ranuras)
+        ocupados_por_ubicacion = {}
+        ubicaciones_con_indicador = set()
+        for indice, ((x1, y1, x2, y2), ubicacion_slot) in enumerate(ranuras):
+            capacidad_bahia = (
+                1
+                if ubicacion_slot is not None
+                else (dato["capacidad"] + len(ranuras) - indice - 1)
+                // len(ranuras)
+            )
             if capacidad_bahia <= 0:
                 break
-            ocupacion_bahia = min(1.0, max(0.0, ocupados))
-            ocupados -= ocupacion_bahia
+            if ubicacion_slot is not None:
+                ocupacion_restante = ocupados_por_ubicacion.setdefault(
+                    ubicacion_slot["codigo"],
+                    ubicacion_slot["ocupados"],
+                )
+                ocupacion_bahia = min(1.0, max(0.0, ocupacion_restante))
+                ocupados_por_ubicacion[ubicacion_slot["codigo"]] = (
+                    ocupacion_restante - ocupacion_bahia
+                )
+                primer_slot_ubicacion = (
+                    ubicacion_slot["codigo"] not in ubicaciones_con_indicador
+                )
+                ubicaciones_con_indicador.add(ubicacion_slot["codigo"])
+                destino_detalle = _id_html(
+                    f'{marcador}-{ubicacion_slot["codigo"]}'
+                )
+            else:
+                ocupacion_bahia = min(1.0, max(0.0, ocupados))
+                ocupados -= ocupacion_bahia
+                primer_slot_ubicacion = False
+                destino_detalle = detalle_id
             inset = 2
             bx1, by1 = x1 + inset, y1 + inset
             bw, bh = max(1, x2 - x1 - inset * 2), max(1, y2 - y1 - inset * 2)
             etiqueta_title = f'<title>{title}</title>'
             svg.append(
-                f'<a href="#{detalle_id}" aria-label="{title}">{etiqueta_title}'
+                f'<a href="#{destino_detalle}" aria-label="{title}">{etiqueta_title}'
                 f'<rect class="slot" x="{bx1:.2f}" y="{by1:.2f}" width="{bw:.2f}" '
                 f'height="{bh:.2f}" rx="2" fill="#ffffff" stroke="{color}" stroke-width="2"/>'
             )
@@ -397,6 +430,17 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
                     f'<rect pointer-events="none" x="{bx1 + 1:.2f}" y="{by1 + 1:.2f}" '
                     f'width="{max(0, (bw - 2) * ocupacion_bahia):.2f}" height="{max(0, bh - 2):.2f}" '
                     f'rx="1" fill="{color}"/>'
+                )
+            elif (
+                ubicacion_slot is not None
+                and ubicacion_slot["materiales"]
+                and primer_slot_ubicacion
+            ):
+                svg.append(
+                    f'<rect class="stock-indicator" pointer-events="none" '
+                    f'x="{bx1 + 1:.2f}" y="{by1 + 1:.2f}" '
+                    f'width="{min(12, max(1, bw - 2)):.2f}" '
+                    f'height="{max(0, bh - 2):.2f}" rx="1" fill="{color}"/>'
                 )
             svg.append("</a>")
 
@@ -510,10 +554,21 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
         if not dato["ubicaciones"]:
             detalles.append("<p>Sin ubicaciones activas.</p>")
         for ubicacion in dato["ubicaciones"]:
-            detalles.append(f'<p><strong>{html.escape(ubicacion["codigo"])}</strong>: ')
-            detalles.append(
-                f'{_fmt_numero(ubicacion["ocupados"])} / {ubicacion["capacidad"]} palets</p>'
-            )
+            es_nivel_estanteria = marcador in ("ESTA", "ESTB")
+            if es_nivel_estanteria:
+                ubicacion_id = _id_html(f'{marcador}-{ubicacion["codigo"]}')
+                detalles.append(
+                    f'<details id="{ubicacion_id}"><summary>'
+                    f'{html.escape(ubicacion["codigo"])}: '
+                    f'{_fmt_numero(ubicacion["ocupados"])} / '
+                    f'{ubicacion["capacidad"]} palets</summary>'
+                )
+            else:
+                detalles.append(
+                    f'<p><strong>{html.escape(ubicacion["codigo"])}</strong>: '
+                    f'{_fmt_numero(ubicacion["ocupados"])} / '
+                    f'{ubicacion["capacidad"]} palets</p>'
+                )
             if ubicacion["materiales"]:
                 detalles.append("<ul>")
                 for material in ubicacion["materiales"]:
@@ -531,6 +586,8 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
                 detalles.append("</ul>")
             else:
                 detalles.append("<p>Sin materiales registrados.</p>")
+            if es_nivel_estanteria:
+                detalles.append("</details>")
         detalles.append("</details>")
     detalles.append("</section>")
 
@@ -548,6 +605,8 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
         + '<script>document.querySelectorAll(\'svg a[href^="#detail-"]\').forEach('
         'function(enlace){enlace.addEventListener("click",function(){'
         'var detalle=document.querySelector(enlace.getAttribute("href"));'
-        'if(detalle){detalle.open=true;}});});</script>'
+        'if(detalle){detalle.open=true;'
+        'var padre=detalle.parentElement.closest("details");'
+        'if(padre){padre.open=true;}}});});</script>'
         + "</body></html>"
     ), secciones_sin_mapa
