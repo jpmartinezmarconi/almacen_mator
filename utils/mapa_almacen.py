@@ -48,6 +48,16 @@ def _normalizar(valor):
     return re.sub(r"[^A-Z0-9]", "", texto.upper())
 
 
+def _nivel_estanteria(valor):
+    clave = _normalizar(valor)
+    coincidencia = re.match(r"^EST([AB])([1-4])(?=R|$)", clave)
+    if coincidencia:
+        return f"EST{coincidencia.group(1)}", int(coincidencia.group(2))
+    if clave in ("ESTA", "ESTB"):
+        return clave, None
+    return None, None
+
+
 def familia_seccion(nombre):
     clave = _normalizar(nombre)
     if clave in _ALIAS_GRUPOS:
@@ -271,12 +281,13 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
     for seccion in secciones:
         seccion_id, nombre = seccion[0], str(seccion[1])
         ubicaciones = ubicaciones_por_seccion.get(seccion_id, [])
+        marcador_estanteria, nivel_seccion = _nivel_estanteria(nombre)
         candidatos = [_normalizar(nombre)]
         candidatos.extend(
             _normalizar(str(ubicacion[1]).split("-R", 1)[0])
             for ubicacion in ubicaciones
         )
-        marcador = next(
+        marcador = marcador_estanteria or next(
             (
                 candidato
                 for candidato in candidatos
@@ -303,9 +314,11 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             dato["ocupados"] += ocupados
             codigo = str(ubicacion[1])
             materiales = inventario_por_ubicacion.get(ubicacion[0], [])
+            _marcador_codigo, nivel_codigo = _nivel_estanteria(codigo)
             dato["ubicaciones"].append(
                 {
                     "codigo": codigo,
+                    "nivel": nivel_seccion or nivel_codigo,
                     "capacidad": capacidad,
                     "ocupados": ocupados,
                     "materiales": materiales,
@@ -352,13 +365,34 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
                 (str(celda.value) for celda in celdas_marcador.get(marcador, [])),
                 dato["nombre"],
             )
-        if marcador in ("ESTA", "ESTB") and len(rangos) == len(dato["ubicaciones"]):
+        layout_niveles_estanteria = (
+            marcador in ("ESTA", "ESTB")
+            and len(rangos) == 4
+            and any(
+            ubicacion["nivel"] is not None for ubicacion in dato["ubicaciones"]
+            )
+        )
+        if layout_niveles_estanteria:
+            ubicaciones_por_nivel = {
+                ubicacion["nivel"]: ubicacion
+                for ubicacion in dato["ubicaciones"]
+                if ubicacion["nivel"] is not None
+            }
+            ranuras = []
+            for indice, rango in enumerate(rangos, start=1):
+                ubicacion = ubicaciones_por_nivel.get(indice)
+                capacidad_nivel = (
+                    ubicacion["capacidad"] if ubicacion is not None else 2
+                )
+                ranuras.extend(
+                    (ranura, ubicacion)
+                    for ranura in _subdividir_rangos([rango], capacidad_nivel)
+                )
+        elif marcador in ("ESTA", "ESTB") and len(rangos) == len(dato["ubicaciones"]):
             ranuras = [
                 (ranura, ubicacion)
                 for rango, ubicacion in zip(rangos, dato["ubicaciones"])
-                for ranura in _subdividir_rangos(
-                    [rango], ubicacion["capacidad"]
-                )
+                for ranura in _subdividir_rangos([rango], ubicacion["capacidad"])
             ]
         else:
             ranuras = [
@@ -389,7 +423,7 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
         for indice, ((x1, y1, x2, y2), ubicacion_slot) in enumerate(ranuras):
             capacidad_bahia = (
                 1
-                if ubicacion_slot is not None
+                if ubicacion_slot is not None or layout_niveles_estanteria
                 else (dato["capacidad"] + len(ranuras) - indice - 1)
                 // len(ranuras)
             )
@@ -416,6 +450,8 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
                 ocupados -= ocupacion_bahia
                 primer_slot_ubicacion = False
                 destino_detalle = detalle_id
+                if layout_niveles_estanteria:
+                    ocupacion_bahia = 0
             inset = 2
             bx1, by1 = x1 + inset, y1 + inset
             bw, bh = max(1, x2 - x1 - inset * 2), max(1, y2 - y1 - inset * 2)

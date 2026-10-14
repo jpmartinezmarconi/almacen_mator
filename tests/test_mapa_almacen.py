@@ -97,6 +97,26 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertIn("<li>Caja pequeña (SKU-C): 0 palets, 25 unidades sueltas", contenido)
         self.assertEqual(contenido.count('class="stock-indicator"'), 1)
 
+    def test_estanteria_con_seccion_por_nivel_muestra_stock_en_su_bahia(self):
+        secciones = [(1, "EST A1", "", 1, 1, 2.5, 1.2, 1.2, 2, 1)]
+        ubicaciones = {
+            1: [(101, "EST-A1-R01-C01", 1, 1, 2, 2.5, 1.2, 1.2, 1, 2)]
+        }
+        stock = [
+            (101, "EST-A1-R01-C01", "EST A1", "Deshumidificador 1500", "003488", 1, 1, 0, 1),
+            (101, "EST-A1-R01-C01", "EST A1", "Deshumidificador 750", "003486", 0, 1, 1, 1),
+        ]
+
+        contenido, sin_mapa = crear_html_mapa(
+            self.ruta_mapa, secciones, ubicaciones, stock
+        )
+
+        self.assertEqual(sin_mapa, [])
+        self.assertIn("2 / 2 palets (100.0%)", contenido)
+        self.assertIn("Deshumidificador 1500 (003488): 1 palets", contenido)
+        self.assertIn("Deshumidificador 750 (003486): 0 palets, 1 unidades sueltas", contenido)
+        self.assertIn('href="#detail-estaesta1r01c01"', contenido)
+
     def test_ubicaciones_libres_y_secciones_sin_correspondencia_se_indican(self):
         secciones = [
             (1, "S18", "", 1, 1, 2.5, 1.2, 1.2, 8, 1),
