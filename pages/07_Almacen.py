@@ -143,6 +143,10 @@ def clave_ubicacion(valor):
     return re.sub(r"[^A-Z0-9]", "", str(valor).strip().upper())
 
 
+def es_nivel_estanteria(valor):
+    return re.fullmatch(r"EST[AB][1-4]", clave_ubicacion(valor)) is not None
+
+
 def mapa_importacion_ubicaciones(secciones, ubicaciones_por_seccion):
     ubicaciones = {}
     for seccion in secciones:
@@ -403,6 +407,7 @@ with pestanas[2]:
     with st.form("formulario_seccion"):
         nombre = st.text_input("Nombre", value=valores[1])
         descripcion = st.text_input("Descripcion", value=valores[2] or "")
+        nivel_estanteria = es_nivel_estanteria(nombre)
         capacidad_palets = st.number_input(
             "Capacidad de la seccion (espacios de palet)",
             min_value=1,
@@ -410,12 +415,16 @@ with pestanas[2]:
             value=(
                 8
                 if clave_ubicacion(nombre) in ("ESTA", "ESTB")
+                else 2
+                if nivel_estanteria
                 else int(valores[8])
             ),
-            disabled=clave_ubicacion(nombre) in ("ESTA", "ESTB"),
+            disabled=clave_ubicacion(nombre) in ("ESTA", "ESTB") or nivel_estanteria,
             help=(
                 "EST A y EST B tienen cuatro niveles con capacidad de dos palets cada uno."
                 if clave_ubicacion(nombre) in ("ESTA", "ESTB")
+                else "Cada nivel individual de estantería admite 2 palets."
+                if nivel_estanteria
                 else None
             ),
         )
@@ -429,6 +438,8 @@ with pestanas[2]:
             capacidad_total = (
                 8
                 if clave_ubicacion(nombre) in ("ESTA", "ESTB")
+                else 2
+                if nivel_estanteria
                 else int(capacidad_palets)
             )
             guardar_seccion(

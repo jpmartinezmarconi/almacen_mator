@@ -14,6 +14,7 @@ from utils.almacen import (
     obtener_ubicaciones_materiales,
     procesar_albaran,
     registrar_movimiento,
+    guardar_seccion,
     transferir_material,
 )
 from utils.db import _init_sqlite
@@ -304,6 +305,56 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
         self.assertEqual(ubicacion_antigua, ("EST-A-R01-C01", 0))
         self.assertEqual(stock, [("EST A1", 2, 0), ("EST A2", 1, 2)])
         migrar_ubicaciones_estanteria()
+
+    def test_migracion_fija_en_dos_palets_la_capacidad_de_cada_nivel(self):
+        with conectar_db(self.db_path) as conn:
+            conn.execute(
+                "ALTER TABLE almacen_secciones ADD COLUMN filas INTEGER DEFAULT 1"
+            )
+            conn.execute(
+                "ALTER TABLE almacen_secciones ADD COLUMN columnas INTEGER DEFAULT 1"
+            )
+            conn.execute(
+                "ALTER TABLE almacen_secciones ADD COLUMN capacidad_palets INTEGER DEFAULT 8"
+            )
+            conn.execute(
+                "ALTER TABLE almacen_ubicaciones ADD COLUMN almacen_id INTEGER DEFAULT 2"
+            )
+            conn.execute(
+                "ALTER TABLE almacen_ubicaciones ADD COLUMN fila INTEGER DEFAULT 1"
+            )
+            conn.execute(
+                "ALTER TABLE almacen_ubicaciones ADD COLUMN columna INTEGER DEFAULT 1"
+            )
+            conn.execute(
+                "INSERT INTO almacen_secciones "
+                "(id, almacen_id, nombre, activa, capacidad_palets) "
+                "VALUES (3, 2, 'EST A1', 1, 8)"
+            )
+            conn.execute(
+                "INSERT INTO almacen_ubicaciones "
+                "(id, seccion_id, almacen_id, codigo, activa, capacidad_palets) "
+                "VALUES (3, 3, 2, 'EST-A1-R01-C01', 1, 8)"
+            )
+            conn.execute(
+                "INSERT INTO almacen_stock "
+                "(ubicacion_id, material, codigo_material, palets, "
+                "unidades_por_palet, unidades_sueltas, espacios_por_palet, actualizado) "
+                "VALUES (3, 'Material A', 'SKU-A', 1, 1, 1, 1, '2026-10-14')"
+            )
+
+        migrar_ubicaciones_estanteria()
+
+        with conectar_db(self.db_path) as conn:
+            seccion = conn.execute(
+                "SELECT filas, columnas, capacidad_palets "
+                "FROM almacen_secciones WHERE id=3"
+            ).fetchone()
+            ubicacion = conn.execute(
+                "SELECT capacidad_palets FROM almacen_ubicaciones WHERE id=3"
+            ).fetchone()
+        self.assertEqual(seccion, (1, 1, 2))
+        self.assertEqual(ubicacion, (2,))
 
     def test_unidades_en_estanteria_pueden_ocupar_cero_espacios_de_palet(self):
         with conectar_db(self.db_path) as conn:

@@ -98,9 +98,26 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertEqual(contenido.count('class="stock-indicator"'), 1)
 
     def test_estanteria_con_seccion_por_nivel_muestra_stock_en_su_bahia(self):
-        secciones = [(1, "EST A1", "", 1, 1, 2.5, 1.2, 1.2, 2, 1)]
+        secciones = [
+            (nivel, f"EST A{nivel}", "", 1, 1, 2.5, 1.2, 1.2, 2, 1)
+            for nivel in range(1, 5)
+        ]
         ubicaciones = {
-            1: [(101, "EST-A1-R01-C01", 1, 1, 2, 2.5, 1.2, 1.2, 1, 2)]
+            nivel: [
+                (
+                    100 + nivel,
+                    f"EST-A{nivel}-R01-C01",
+                    1,
+                    1,
+                    2,
+                    2.5,
+                    1.2,
+                    1.2,
+                    1,
+                    2 if nivel == 1 else 0,
+                )
+            ]
+            for nivel in range(1, 5)
         }
         stock = [
             (101, "EST-A1-R01-C01", "EST A1", "Deshumidificador 1500", "003488", 1, 1, 0, 1),
@@ -112,7 +129,11 @@ class MapaAlmacenTest(unittest.TestCase):
         )
 
         self.assertEqual(sin_mapa, [])
-        self.assertIn("2 / 2 palets (100.0%)", contenido)
+        self.assertIn("Estantería EST A (total): 2 / 8 palets (25.0%)", contenido)
+        self.assertIn("EST A1: 2 / 2 palets", contenido)
+        self.assertIn("EST A2: 0 / 2 palets", contenido)
+        self.assertIn("EST A1 | 2 / 2 palets (100.0%)", contenido)
+        self.assertIn("EST A2 | 0 / 2 palets (0.0%)", contenido)
         self.assertIn("Deshumidificador 1500 (003488): 1 palets", contenido)
         self.assertIn("Deshumidificador 750 (003486): 0 palets, 1 unidades sueltas", contenido)
         self.assertIn('href="#detail-estaesta1r01c01"', contenido)

@@ -369,6 +369,50 @@ def migrar_ubicaciones_estanteria():
                 (seccion_id,),
             )
 
+        secciones_nivel = conn.execute(
+            "SELECT id, nombre FROM almacen_secciones "
+            "WHERE almacen_id=? AND activa=1",
+            (nave[0],),
+        ).fetchall()
+        for seccion_id, nombre in secciones_nivel:
+            nivel = re.sub(r"[^A-Z0-9]", "", str(nombre).upper())
+            if not re.fullmatch(r"EST[AB][1-4]", nivel):
+                continue
+
+            ubicaciones_nivel = conn.execute(
+                "SELECT id FROM almacen_ubicaciones "
+                "WHERE seccion_id=? AND activa=1",
+                (seccion_id,),
+            ).fetchall()
+            if len(ubicaciones_nivel) > 1:
+                raise ValueError(
+                    f"{nombre} tiene varias ubicaciones activas. "
+                    "Cada nivel de estantería debe tener una sola ubicación."
+                )
+            if ubicaciones_nivel:
+                ubicacion_id = ubicaciones_nivel[0][0]
+                ocupacion = conn.execute(
+                    f"SELECT COALESCE(SUM({OCUPACION_POR_STOCK_SQL.format(alias='s')}), 0) "
+                    "FROM almacen_stock s WHERE s.ubicacion_id=?",
+                    (ubicacion_id,),
+                ).fetchone()[0]
+                if ocupacion > 2:
+                    raise ValueError(
+                        f"{nombre} tiene {ocupacion} espacios de palet ocupados, "
+                        "pero cada nivel admite 2. Revisa las existencias antes de "
+                        "ajustar su capacidad."
+                    )
+                conn.execute(
+                    "UPDATE almacen_ubicaciones SET fila=1, columna=1, "
+                    "capacidad_palets=2 WHERE id=?",
+                    (ubicacion_id,),
+                )
+            conn.execute(
+                "UPDATE almacen_secciones SET filas=1, columnas=1, "
+                "capacidad_palets=2 WHERE id=?",
+                (seccion_id,),
+            )
+
         conn.commit()
     except Exception:
         conn.rollback()
@@ -393,8 +437,13 @@ def guardar_seccion(
     if not nombre:
         raise ValueError("El nombre de la seccion es obligatorio.")
     es_estanteria = nombre.upper() in ("EST A", "EST B")
+    es_nivel_estanteria = re.fullmatch(
+        r"EST\s*[AB]\s*[1-4]", nombre.upper()
+    ) is not None
     if es_estanteria:
         filas, columnas, capacidad_palets = 4, 1, 8
+    elif es_nivel_estanteria:
+        filas, columnas, capacidad_palets = 1, 1, 2
     if min(filas, columnas, capacidad_palets) < 1:
         raise ValueError("Filas, columnas y capacidad deben ser mayores que cero.")
     if min(alto_m, ancho_m, fondo_m) <= 0:
@@ -464,7 +513,9 @@ def guardar_seccion(
                     if es_estanteria
                     else f"{prefijo}-R{fila:02d}-C{columna:02d}"
                 )
-                capacidad_ubicacion = 2 if es_estanteria else capacidad_palets
+                capacidad_ubicacion = (
+                    2 if es_estanteria or es_nivel_estanteria else capacidad_palets
+                )
                 existente = conn.execute(
                     "SELECT id FROM almacen_ubicaciones WHERE seccion_id=? AND codigo = ?",
                     (seccion_id, codigo),

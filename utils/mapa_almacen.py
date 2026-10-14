@@ -418,9 +418,40 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             else:
                 tooltip.append(f'{ubicacion["codigo"]}: sin materiales')
         title = html.escape(" | ".join(tooltip))
+
+        def titulo_ubicacion_estanteria(ubicacion, nivel):
+            capacidad_ubicacion = ubicacion["capacidad"] if ubicacion else 2
+            ocupados_ubicacion = ubicacion["ocupados"] if ubicacion else 0
+            nombre_nivel = f"EST {marcador[-1]}{nivel}"
+            porcentaje_ubicacion = (
+                ocupados_ubicacion / capacidad_ubicacion * 100
+                if capacidad_ubicacion
+                else 0
+            )
+            contenido = [
+                nombre_nivel,
+                f"{_fmt_numero(ocupados_ubicacion)} / {capacidad_ubicacion} palets "
+                f"({porcentaje_ubicacion:.1f}%)",
+            ]
+            if ubicacion:
+                if ubicacion["materiales"]:
+                    contenido.extend(
+                        f"{material[3]}: {material[5]} palets, "
+                        f"{material[7]} unidades sueltas"
+                        for material in ubicacion["materiales"]
+                    )
+                else:
+                    contenido.append("Sin materiales")
+            return html.escape(" | ".join(contenido))
+
         ocupados_por_ubicacion = {}
         ubicaciones_con_indicador = set()
         for indice, ((x1, y1, x2, y2), ubicacion_slot) in enumerate(ranuras):
+            nivel_slot = (
+                ubicacion_slot["nivel"]
+                if ubicacion_slot is not None
+                else (indice // 2 + 1 if layout_niveles_estanteria else None)
+            )
             capacidad_bahia = (
                 1
                 if ubicacion_slot is not None or layout_niveles_estanteria
@@ -455,9 +486,16 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             inset = 2
             bx1, by1 = x1 + inset, y1 + inset
             bw, bh = max(1, x2 - x1 - inset * 2), max(1, y2 - y1 - inset * 2)
-            etiqueta_title = f'<title>{title}</title>'
+            title_slot = (
+                titulo_ubicacion_estanteria(
+                    ubicaciones_por_nivel.get(nivel_slot), nivel_slot
+                )
+                if layout_niveles_estanteria and nivel_slot is not None
+                else title
+            )
+            etiqueta_title = f'<title>{title_slot}</title>'
             svg.append(
-                f'<a href="#{destino_detalle}" aria-label="{title}">{etiqueta_title}'
+                f'<a href="#{destino_detalle}" aria-label="{title_slot}">{etiqueta_title}'
                 f'<rect class="slot" x="{bx1:.2f}" y="{by1:.2f}" width="{bw:.2f}" '
                 f'height="{bh:.2f}" rx="2" fill="#ffffff" stroke="{color}" stroke-width="2"/>'
             )
@@ -582,8 +620,13 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
         capacidad = dato["capacidad"]
         porcentaje = dato["ocupados"] / capacidad * 100 if capacidad else 0
         nombre = html.escape(dato["nombre"])
+        etiqueta_resumen = (
+            f"Estantería EST {marcador[-1]} (total)"
+            if marcador in ("ESTA", "ESTB")
+            else nombre
+        )
         detalles.append(
-            f'<details id="{_id_html(marcador)}"><summary>{nombre}: '
+            f'<details id="{_id_html(marcador)}"><summary>{etiqueta_resumen}: '
             f'{_fmt_numero(dato["ocupados"])} / {capacidad} palets '
             f'({porcentaje:.1f}%)</summary>'
         )
@@ -593,9 +636,14 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             es_nivel_estanteria = marcador in ("ESTA", "ESTB")
             if es_nivel_estanteria:
                 ubicacion_id = _id_html(f'{marcador}-{ubicacion["codigo"]}')
+                nombre_nivel = (
+                    f"EST {marcador[-1]}{ubicacion['nivel']}"
+                    if ubicacion["nivel"] is not None
+                    else ubicacion["codigo"]
+                )
                 detalles.append(
                     f'<details id="{ubicacion_id}"><summary>'
-                    f'{html.escape(ubicacion["codigo"])}: '
+                    f'{html.escape(nombre_nivel)}: '
                     f'{_fmt_numero(ubicacion["ocupados"])} / '
                     f'{ubicacion["capacidad"]} palets</summary>'
                 )
