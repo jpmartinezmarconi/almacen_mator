@@ -133,10 +133,21 @@ def _rango_marcador(ws, clave, celdas_marcador, x, y):
             for celda in celdas
         ]
     if clave in ("ESTA", "ESTB"):
-        return [
-            _rango_celda(17, celda.column, 28, celda.column, x, y)
-            for celda in celdas
-        ]
+        rangos = []
+        for celda in celdas:
+            x1, y1, x2, y2 = _rango_celda(
+                17, celda.column, 28, celda.column, x, y
+            )
+            rangos.extend(
+                (
+                    x1,
+                    y1 + (y2 - y1) * indice / 4,
+                    x2,
+                    y1 + (y2 - y1) * (indice + 1) / 4,
+                )
+                for indice in range(4)
+            )
+        return rangos
     if re.fullmatch(r"ELE[1-3]", clave):
         resultado = []
         for celda in celdas:
@@ -427,7 +438,7 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
                     )
 
     for celda in ws._cells.values():
-        if celda.value is None:
+        if celda.value is None or _normalizar(celda.value) in ("ESTA", "ESTB"):
             continue
         min_col = max_col = celda.column
         min_row = max_row = celda.row
@@ -446,6 +457,18 @@ def crear_html_mapa(ruta_excel, secciones, ubicaciones_por_seccion, stock):
             'font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#17212b">'
             f"{texto}</text>"
         )
+
+    for marcador in ("ESTA", "ESTB"):
+        prefijo = "EST A" if marcador == "ESTA" else "EST B"
+        for indice, (x1, y1, x2, y2) in enumerate(
+            _rango_marcador(ws, marcador, celdas_marcador, x, y),
+            start=1,
+        ):
+            svg.append(
+                f'<text x="{x1 + 8:.2f}" y="{y1 + 22:.2f}" font-size="18" '
+                'font-weight="bold" fill="#17212b" pointer-events="none">'
+                f"{prefijo}{indice}</text>"
+            )
 
     for numero in range(1, 5):
         for letra in "ABCD":

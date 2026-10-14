@@ -53,7 +53,33 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertIn("Material A (SKU-A): 6 palets", contenido)
         self.assertIn("href=\"#detail-s18\"", contenido)
         self.assertEqual(contenido.count('class="slot"'), 8)
-        self.assertEqual(contenido.count('pointer-events="none"'), 38)
+        self.assertEqual(contenido.count('pointer-events="none"'), 46)
+
+    def test_estanterias_a_y_b_muestran_cuatro_niveles_de_dos_palets(self):
+        secciones = [
+            (1, "EST A", "", 1, 1, 2.5, 1.2, 1.2, 8, 1),
+            (2, "EST B", "", 1, 1, 2.5, 1.2, 1.2, 8, 1),
+        ]
+        ubicaciones = {
+            1: [(10, "EST-A-R01-C01", 1, 1, 8, 2.5, 1.2, 1.2, 1, 3)],
+            2: [(20, "EST-B-R01-C01", 1, 1, 8, 2.5, 1.2, 1.2, 1, 2)],
+        }
+
+        contenido, sin_mapa = crear_html_mapa(
+            self.ruta_mapa, secciones, ubicaciones, []
+        )
+
+        self.assertEqual(sin_mapa, [])
+        for nombre in (
+            "EST A1", "EST A2", "EST A3", "EST A4",
+            "EST B1", "EST B2", "EST B3", "EST B4",
+        ):
+            self.assertIn(f">{nombre}</text>", contenido)
+        self.assertNotIn(">EST A</text>", contenido)
+        self.assertNotIn(">EST B</text>", contenido)
+        self.assertEqual(contenido.count('class="slot"'), 16)
+        self.assertIn("3 / 8 palets (37.5%)", contenido)
+        self.assertIn("2 / 8 palets (25.0%)", contenido)
 
     def test_ubicaciones_libres_y_secciones_sin_correspondencia_se_indican(self):
         secciones = [
@@ -73,7 +99,7 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertIn("0 / 8 palets (0.0%)", contenido)
         self.assertIn("Sin materiales registrados.", contenido)
         self.assertEqual(contenido.count('class="slot"'), 8)
-        self.assertEqual(contenido.count('pointer-events="none"'), 32)
+        self.assertEqual(contenido.count('pointer-events="none"'), 40)
 
     def test_mapa_muestra_las_dieciséis_subsecciones_sp(self):
         nombres = [
@@ -127,7 +153,7 @@ class MapaAlmacenTest(unittest.TestCase):
             self.assertIn(f'href="#detail-{nombre.lower()}"', contenido)
             self.assertIn(f"<summary>{nombre}:", contenido)
         self.assertEqual(contenido.count('class="slot"'), 32)
-        self.assertEqual(contenido.count('pointer-events="none"'), 48)
+        self.assertEqual(contenido.count('pointer-events="none"'), 56)
 
     def test_muestra_las_subsecciones_sp_aunque_aun_no_estan_configuradas(self):
         contenido, sin_mapa = crear_html_mapa(self.ruta_mapa, [], {}, [])
@@ -140,7 +166,7 @@ class MapaAlmacenTest(unittest.TestCase):
         self.assertEqual(sin_mapa, [])
         for nombre in nombres:
             self.assertIn(f">{nombre}</text>", contenido)
-        self.assertEqual(contenido.count('pointer-events="none"'), 32)
+        self.assertEqual(contenido.count('pointer-events="none"'), 40)
 
 
 if __name__ == "__main__":
