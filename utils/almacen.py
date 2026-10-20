@@ -5,6 +5,11 @@ from utils.db import get_conn
 
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+SECCIONES_SPOTCOOLER = tuple(
+    f"SP{numero}{letra}"
+    for numero in range(1, 5)
+    for letra in "ABCD"
+)
 OCUPACION_POR_STOCK_SQL = (
     "({alias}.palets + CASE WHEN {alias}.unidades_sueltas > 0 "
     "THEN ({alias}.unidades_sueltas + {alias}.unidades_por_palet - 1) "
@@ -1079,20 +1084,34 @@ def obtener_movimientos(almacen_id=1, limite=100):
         conn.close()
 
 
-def resumen_almacen(almacen_id=1):
+def resumen_almacen(almacen_id=1, excluir_secciones=()):
+    secciones_excluidas = {
+        re.sub(r"[^A-Z0-9]", "", str(nombre).upper())
+        for nombre in excluir_secciones
+    }
     conn = get_conn()
     try:
-        fila = conn.execute(
-            "SELECT COALESCE(SUM(u.capacidad_palets), 0), COALESCE(SUM(s.palets), 0) "
+        filas = conn.execute(
+            "SELECT sec.nombre, COALESCE(SUM(u.capacidad_palets), 0), "
+            "COALESCE(SUM(s.palets), 0) "
             "FROM almacen_ubicaciones u "
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
             "LEFT JOIN (SELECT ubicacion_id, "
             f"SUM({OCUPACION_POR_STOCK_SQL.format(alias='stock')}) AS palets "
             "FROM almacen_stock stock GROUP BY ubicacion_id) s ON s.ubicacion_id=u.id "
-            "WHERE u.activa=1 AND sec.almacen_id=?",
+            "WHERE u.activa=1 AND sec.almacen_id=? "
+            "GROUP BY sec.id, sec.nombre",
             (almacen_id,),
-        ).fetchone()
-        return int(fila[0]), int(fila[1])
+        ).fetchall()
+        capacidad_total = 0
+        palets_ocupados = 0
+        for nombre, capacidad, ocupados in filas:
+            clave = re.sub(r"[^A-Z0-9]", "", str(nombre).upper())
+            if clave in secciones_excluidas:
+                continue
+            capacidad_total += capacidad
+            palets_ocupados += ocupados
+        return int(capacidad_total), int(palets_ocupados)
     finally:
         conn.close()
 

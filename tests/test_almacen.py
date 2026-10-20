@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from utils.almacen import (
     OCUPACION_POR_STOCK_SQL,
+    SECCIONES_SPOTCOOLER,
     ajustar_stock,
     analizar_materiales_albaran,
     buscar_stock_materiales,
@@ -15,6 +16,7 @@ from utils.almacen import (
     procesar_albaran,
     registrar_movimiento,
     guardar_seccion,
+    resumen_almacen,
     transferir_material,
 )
 from utils.db import _init_sqlite
@@ -127,6 +129,57 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
                 "VALUES (?, 'Material A', ?, 0, 10, ?, ?, '2026-10-05')",
                 (ubicacion_id, codigo, unidades, espacios),
             )
+
+    def test_resumen_almacen_excluye_las_16_secciones_spotcooler(self):
+        nombres_spotcooler = (
+            "SP1 A", "SP1 B", "SP1 C", "SP1D",
+            "SP2A", "SP2B", "SP2C", "SP2D",
+            "SP3A", "SP3B", "SP3C", "SP3D",
+            "SP4A", "SP4B", "SP4C", "SP4D",
+        )
+        self.assertEqual(len(SECCIONES_SPOTCOOLER), 16)
+
+        with conectar_db(self.db_path) as conn:
+            for indice, nombre in enumerate(nombres_spotcooler, start=3):
+                conn.execute(
+                    "INSERT INTO almacen_secciones "
+                    "(id, almacen_id, nombre, activa) VALUES (?, 1, ?, 1)",
+                    (indice, nombre),
+                )
+                conn.execute(
+                    "INSERT INTO almacen_ubicaciones "
+                    "(id, seccion_id, codigo, activa, capacidad_palets) "
+                    "VALUES (?, ?, ?, 1, 1)",
+                    (indice, indice, f"SPOT-{indice}"),
+                )
+                conn.execute(
+                    "INSERT INTO almacen_stock "
+                    "(ubicacion_id, material, palets, unidades_por_palet, "
+                    "unidades_sueltas, actualizado) "
+                    "VALUES (?, ?, 1, 1, 0, '2026-10-20')",
+                    (indice, f"Material {nombre}"),
+                )
+            conn.execute(
+                "INSERT INTO almacen_secciones "
+                "(id, almacen_id, nombre, activa) VALUES (19, 1, 'Zona normal', 1)"
+            )
+            conn.execute(
+                "INSERT INTO almacen_ubicaciones "
+                "(id, seccion_id, codigo, activa, capacidad_palets) "
+                "VALUES (19, 19, 'NORMAL-1', 1, 3)"
+            )
+            conn.execute(
+                "INSERT INTO almacen_stock "
+                "(ubicacion_id, material, palets, unidades_por_palet, "
+                "unidades_sueltas, actualizado) "
+                "VALUES (19, 'Material normal', 1, 1, 0, '2026-10-20')"
+            )
+
+        resumen_completo = resumen_almacen(1)
+        resumen_sin_spotcoolers = resumen_almacen(1, SECCIONES_SPOTCOOLER)
+
+        self.assertEqual(resumen_completo, (29, 17))
+        self.assertEqual(resumen_sin_spotcoolers, (13, 1))
 
     def test_descuenta_nave_1_antes_que_nave_2_aunque_tenga_mayor_id(self):
         self._guardar_stock(1, 5)

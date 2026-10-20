@@ -11,7 +11,9 @@ albaranes no se modifican. Ambas naves empiezan sin secciones y se configuran de
 forma independiente. Cada seccion tiene una sola ubicacion y se define por su
 capacidad total en palets. En la pestaña Traslados se puede mover material entre
 ubicaciones de ambas naves; el traslado actualiza las dos existencias en una sola
-transaccion y registra su salida y recepcion en el historial.
+transaccion y registra su salida y recepcion en el historial. El resumen muestra
+tambien la ocupacion y los espacios libres sin las secciones SP1A-SP4D reservadas
+para los Spotcoolers.
 
 ## Albaranes y existencias
 

@@ -21,6 +21,7 @@ from utils.almacen import (
     obtener_detalle_ubicacion,
     obtener_movimientos,
     registrar_movimiento,
+    SECCIONES_SPOTCOOLER,
     resumen_almacen,
     transferir_material,
 )
@@ -163,12 +164,25 @@ def mapa_importacion_ubicaciones(secciones, ubicaciones_por_seccion):
 
 
 capacidad_total, palets_ocupados = resumen_almacen(almacen_id)
+capacidad_sin_spotcoolers, ocupados_sin_spotcoolers = resumen_almacen(
+    almacen_id,
+    SECCIONES_SPOTCOOLER,
+)
 porcentaje = (palets_ocupados / capacidad_total * 100) if capacidad_total else 0
 metricas = st.columns(4)
 metricas[0].metric("Capacidad total", f"{formato_numero(capacidad_total)} espacios")
 metricas[1].metric("Espacios ocupados", formato_numero(palets_ocupados))
 metricas[2].metric("Espacios libres", formato_numero(max(capacidad_total - palets_ocupados, 0)))
 metricas[3].metric("Ocupacion", f"{porcentaje:.1f}%")
+metricas_sin_spotcoolers = st.columns(2)
+metricas_sin_spotcoolers[0].metric(
+    "Espacios ocupados sin los Spotcoolers",
+    formato_numero(ocupados_sin_spotcoolers),
+)
+metricas_sin_spotcoolers[1].metric(
+    "Espacios libres sin los Spotcoolers",
+    formato_numero(max(capacidad_sin_spotcoolers - ocupados_sin_spotcoolers, 0)),
+)
 st.progress(min(porcentaje / 100, 1.0), text=f"Ocupacion global: {porcentaje:.1f}%")
 
 secciones = listar_secciones(almacen_id)
