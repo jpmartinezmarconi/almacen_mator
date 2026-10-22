@@ -26,17 +26,21 @@ def mostrar_inicio():
     mostrar_fondo_inicio()
     mostrar_logo()
     st.markdown("""
-        <h1 style='text-align: center; color: #e6001a; font-family: Arial, sans-serif; font-weight: 900; font-style: italic; letter-spacing: -1.5px;'>
+        <h1 style='text-align: left; color: #e6001a; font-family: Arial, sans-serif; font-weight: 800; font-style: italic; letter-spacing: -0.5px;'>
             Almacen Mator - Virtual storage
         </h1>
     """, unsafe_allow_html=True)
+
+    st.markdown(
+        '<p class="mator-home-label">Selecciona una sección:</p>',
+        unsafe_allow_html=True,
+    )
 
     with st.container():
         st.markdown(
             '<span class="mator-home-menu" aria-hidden="true"></span>',
             unsafe_allow_html=True,
         )
-        st.write("Selecciona una sección:")
 
         for ruta, nombre, icono in paginas:
             st.page_link(ruta, label=nombre, icon=icono)
