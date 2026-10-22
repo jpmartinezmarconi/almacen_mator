@@ -6,6 +6,32 @@ import streamlit as st
 
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "logo.png"
 LOGO_DATA = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+HOME_BACKGROUND_PATH = (
+    Path(__file__).resolve().parents[1] / "assets" / "fondo_maquinas.webp"
+)
+HOME_BACKGROUND_DATA = base64.b64encode(
+    HOME_BACKGROUND_PATH.read_bytes()
+).decode("ascii")
+
+
+def mostrar_fondo_inicio():
+    st.markdown(
+        f"""
+        <style>
+        section[data-testid="stMain"]:has(.mator-home-background) {{
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12)),
+                url("data:image/webp;base64,{HOME_BACKGROUND_DATA}");
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            background-attachment: fixed;
+        }}
+        </style>
+        <span class="mator-home-background" aria-hidden="true" style="display: none;"></span>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def mostrar_logo():

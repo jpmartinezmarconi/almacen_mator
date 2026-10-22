@@ -14,7 +14,6 @@ from utils.db import get_conn, init_db
 PASSWORDS_EQUIPOS = {"ju@n", "t@ny"}
 EQUIPO_COLUMNS = ["nombre", "cantidad", "numero_serie", "seccion"]
 
-st.set_page_config(page_title="Equipos - Almacén Mator", layout="wide")
 mostrar_logo()
 init_db()
 

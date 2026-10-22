@@ -32,7 +32,6 @@ from utils.mapa_almacen import crear_html_mapa
 
 PASSWORDS_ALMACEN = {"ju@n", "s@r@", "j@rdi"}
 
-st.set_page_config(page_title="Almacen Virtual - Almacen Mator", layout="wide")
 mostrar_logo()
 
 if not st.session_state.get("almacen_virtual_autorizado"):

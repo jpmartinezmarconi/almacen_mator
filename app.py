@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.branding import mostrar_logo
+from utils.branding import mostrar_fondo_inicio, mostrar_logo
 from utils.albaranes import (
     finalizar_albaranes_vencidos,
     iniciar_finalizador_automatico,
@@ -23,6 +23,7 @@ paginas = [
 
 
 def mostrar_inicio():
+    mostrar_fondo_inicio()
     mostrar_logo()
     st.markdown("""
         <h1 style='text-align: center; color: #e6001a; font-family: Arial, sans-serif; font-weight: 900; font-style: italic; letter-spacing: -1.5px;'>
