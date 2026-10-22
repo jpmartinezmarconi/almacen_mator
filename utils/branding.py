@@ -9,6 +9,21 @@ LOGO_DATA = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
 
 
 def mostrar_logo():
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"] > div {
+            background-color: #f7f9fb;
+            background-image:
+                radial-gradient(ellipse at 12% 16%, rgba(174, 202, 218, 0.36), transparent 42%),
+                radial-gradient(ellipse at 86% 38%, rgba(186, 193, 201, 0.28), transparent 40%),
+                radial-gradient(ellipse at 38% 82%, rgba(198, 220, 232, 0.32), transparent 46%),
+                linear-gradient(145deg, #ffffff 0%, #f5f7f9 52%, #edf4f8 100%);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     imagen = f"<img src='data:image/png;base64,{LOGO_DATA}' width='220' alt='Logo Mator'>"
     imagen_lateral = f"<img src='data:image/png;base64,{LOGO_DATA}' width='180' alt='Logo Mator'>"
     st.markdown(imagen, unsafe_allow_html=True)
