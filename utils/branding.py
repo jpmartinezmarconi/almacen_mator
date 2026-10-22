@@ -34,6 +34,38 @@ def mostrar_fondo_inicio():
             background-attachment: fixed;
             background-color: #f8fafc;
         }}
+        section.main:has(.mator-home-background) h1 {{
+            box-sizing: border-box;
+            width: fit-content;
+            max-width: 100%;
+            margin: 0 auto 1rem;
+            padding: 0.55rem 1rem;
+            color: #111111 !important;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid #c7d2dc;
+            border-radius: 12px;
+        }}
+        section.main:has(.mator-home-background) [data-testid="stMarkdownContainer"] > p {{
+            width: fit-content;
+            padding: 0.45rem 0.8rem;
+            color: #111111 !important;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid #c7d2dc;
+            border-radius: 8px;
+        }}
+        section.main:has(.mator-home-background) [data-testid="stPageLink"] {{
+            box-sizing: border-box;
+            margin: 0.4rem 0;
+            padding: 0.2rem 0.7rem;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid #c7d2dc;
+            border-radius: 10px;
+        }}
+        section.main:has(.mator-home-background) [data-testid="stPageLink"] a {{
+            color: #111111 !important;
+            font-weight: 700;
+        }}
         </style>
         <span class="mator-home-background" aria-hidden="true" style="display: none;"></span>
         """,
@@ -55,6 +87,18 @@ def mostrar_logo():
                 linear-gradient(145deg, #ffffff 0%, #f5f7f9 52%, #edf4f8 100%);
             background-position: center;
             background-size: cover;
+        }}
+        [data-testid="stSidebarNavItems"] {{
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+        }}
+        [data-testid="stSidebarNavViewButton"] {{
+            display: none !important;
+        }}
+        [data-testid="stSidebarNavLink"] {{
+            color: #111111 !important;
+            font-weight: 700 !important;
         }}
         </style>
         """,
