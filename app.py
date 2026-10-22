@@ -30,10 +30,16 @@ def mostrar_inicio():
             Almacen Mator - Virtual storage
         </h1>
     """, unsafe_allow_html=True)
-    st.write("Selecciona una sección:")
 
-    for ruta, nombre, icono in paginas:
-        st.page_link(ruta, label=nombre, icon=icono)
+    with st.container():
+        st.markdown(
+            '<span class="mator-home-menu" aria-hidden="true"></span>',
+            unsafe_allow_html=True,
+        )
+        st.write("Selecciona una sección:")
+
+        for ruta, nombre, icono in paginas:
+            st.page_link(ruta, label=nombre, icon=icono)
 
 
 pagina = st.navigation(
