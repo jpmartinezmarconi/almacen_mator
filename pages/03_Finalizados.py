@@ -19,7 +19,11 @@ estado_filtro = st.selectbox("Estado", ["todos", "entrada", "procesando", "final
 buscar_historial = bool(empresa_filtro.strip() or nombre_filtro.strip())
 fecha_hoy = datetime.now(ZoneInfo("Europe/Madrid")).date().isoformat()
 
-query = "SELECT * FROM albaranes WHERE substr(fecha, 1, 10) = ?"
+query = (
+    "SELECT id, nombre, empresa, solicitado_por, materiales, comentario, "
+    "envio_recogida, estado, observaciones, mensaje_final, fecha, "
+    "foto_preparacion FROM albaranes WHERE substr(fecha, 1, 10) = ?"
+)
 params = [fecha_hoy]
 
 if empresa_filtro:
@@ -108,4 +112,3 @@ for albaran in resultados:
                 st.warning(f"Albarán finalizado, pero no se pudo guardar el CSV: {error}")
 
             st.success("Albarán marcado como finalizado")
-
