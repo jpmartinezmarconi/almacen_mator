@@ -2,6 +2,9 @@
 
 Real-world Warehouse Management System (WMS) designed to support daily warehouse operations, including inventory control, order preparation, task tracking, and virtual warehouse mapping.
 
+<img width="1438" height="910" alt="Captura de pantalla 2026-10-28 154934" src="https://github.com/user-attachments/assets/1b0cd393-e1d7-4a95-ba56-1147cd07dfbc" />
+
+
 Key Features
 Multi-Warehouse Management
 Manage multiple warehouses from a single platform.
@@ -61,5 +64,43 @@ Real-time inventory updates after processing delivery notes.
 <img width="1445" height="908" alt="Captura de pantalla 2026-10-28 155031" src="https://github.com/user-attachments/assets/7790c04d-184a-47f6-bce7-0196e0156507" />
 <img width="1438" height="910" alt="Captura de pantalla 2026-10-28 154934" src="https://github.com/user-attachments/assets/b12b31fb-3e54-4d6b-a278-8a0880222166" />
 <img width="1436" height="815" alt="Captura de pantalla 2026-10-28 155131" src="https://github.com/user-attachments/assets/a2657d61-cd08-425f-ac22-ffb8c263c75a" />
+<img width="1438" height="910" alt="Captura de pantalla 2026-10-28 154934" src="https://github.com/user-attachments/assets/d1cdc041-c8f8-4d82-9b00-2482749fe3bd" />
 
-<img width="987" height="768" alt="Captura de pantalla 2026-10-28 155739" src="https://github.com/user-attachments/assets/0547b7dd-61be-4a19-88ea-bf7a41668fb3" />
+Technology Stack
+Backend Development
+Python
+Flask
+SQLAlchemy
+REST API development
+Database
+PostgreSQL
+Neon Serverless Database
+Cloud & Deployment
+Render
+GitHub
+Continuous Deployment
+Integrations
+Telegram Bot API
+Automated warehouse notifications
+Warehouse Systems
+Inventory Management
+Stock Synchronization
+Delivery Note Processing
+Warehouse Occupancy Analytics
+Multi-Warehouse Operations
+Frontend
+HTML5
+CSS3
+JavaScript
+Responsive User Interface
+Development Tools
+Git
+GitHub
+GitHub Copilot
+Visual Studio Code
+Software Architecture
+Relational Database Design
+Warehouse Process Modelling
+Business Logic Automation
+Real-Time Inventory Tracking
+Decision Support Systems
