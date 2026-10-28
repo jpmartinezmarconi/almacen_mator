@@ -62,9 +62,9 @@ Inventory Control
 Real-time inventory updates after processing delivery notes.
 <img width="1429" height="906" alt="Captura de pantalla 2026-10-28 155049" src="https://github.com/user-attachments/assets/4dd07fd7-0f7f-4bc6-9aaa-8fe41c88ff44" />
 <img width="1445" height="908" alt="Captura de pantalla 2026-10-28 155031" src="https://github.com/user-attachments/assets/7790c04d-184a-47f6-bce7-0196e0156507" />
-<img width="1438" height="910" alt="Captura de pantalla 2026-10-28 154934" src="https://github.com/user-attachments/assets/b12b31fb-3e54-4d6b-a278-8a0880222166" />
+
 <img width="1436" height="815" alt="Captura de pantalla 2026-10-28 155131" src="https://github.com/user-attachments/assets/a2657d61-cd08-425f-ac22-ffb8c263c75a" />
-<img width="1438" height="910" alt="Captura de pantalla 2026-10-28 154934" src="https://github.com/user-attachments/assets/d1cdc041-c8f8-4d82-9b00-2482749fe3bd" />
+
 
 Technology Stack
 Backend Development
