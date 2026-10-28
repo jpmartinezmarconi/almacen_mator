@@ -49,3 +49,17 @@ Why This Project Is Different
 Unlike most inventory applications, Almacén Mator was developed to solve real operational challenges in an active warehouse environment.
 
 The platform combines inventory management, warehouse mapping, capacity planning, occupancy monitoring, and inter-warehouse logistics in a single system used daily by warehouse personnel.
+
+Virtual Warehouse
+Visual representation of warehouse sectors, pallet positions, and occupancy.
+<img width="1893" height="889" alt="Captura de pantalla 2026-10-28 155229" src="https://github.com/user-attachments/assets/afb705f1-beaf-4900-b02b-fe4a4677dc62" />
+<img width="1898" height="907" alt="Captura de pantalla 2026-10-28 155253" src="https://github.com/user-attachments/assets/673282b6-28cb-4c9c-87c4-7954531b7e52" />
+
+Inventory Control
+Real-time inventory updates after processing delivery notes.
+<img width="1429" height="906" alt="Captura de pantalla 2026-10-28 155049" src="https://github.com/user-attachments/assets/4dd07fd7-0f7f-4bc6-9aaa-8fe41c88ff44" />
+<img width="1445" height="908" alt="Captura de pantalla 2026-10-28 155031" src="https://github.com/user-attachments/assets/7790c04d-184a-47f6-bce7-0196e0156507" />
+<img width="1438" height="910" alt="Captura de pantalla 2026-10-28 154934" src="https://github.com/user-attachments/assets/b12b31fb-3e54-4d6b-a278-8a0880222166" />
+<img width="1436" height="815" alt="Captura de pantalla 2026-10-28 155131" src="https://github.com/user-attachments/assets/a2657d61-cd08-425f-ac22-ffb8c263c75a" />
+
+<img width="987" height="768" alt="Captura de pantalla 2026-10-28 155739" src="https://github.com/user-attachments/assets/0547b7dd-61be-4a19-88ea-bf7a41668fb3" />
