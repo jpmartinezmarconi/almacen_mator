@@ -26,7 +26,7 @@ st.title("Procesando Albaranes")
 
 password = st.text_input("Contraseña", type="password")
 
-if password != "ju@n":
+if password != "clave_procesando":
     st.error("Contraseña incorrecta")
     st.stop()
 
