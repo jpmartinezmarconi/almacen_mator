@@ -30,7 +30,7 @@ from utils.db import init_db
 from utils.mapa_almacen import crear_html_mapa
 
 
-PASSWORDS_ALMACEN = {"ju@n", "s@r@", "j@rdi"}
+PASSWORDS_ALMACEN = {"clave_almacenvirtual"}
 
 mostrar_logo()
 
