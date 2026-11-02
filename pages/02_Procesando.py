@@ -26,11 +26,10 @@ iniciar_finalizador_automatico()
 st.title("Procesando Albaranes")
 
 section_password = get_password("ALBARANES_PASSWORD")
-if section_password is None:
-    st.error("La contraseña de esta sección no está configurada.")
-    st.stop()
-
 password = st.text_input("Contraseña", type="password")
+if section_password is None:
+    st.error("Configura ALBARANES_PASSWORD en las variables de entorno de Render.")
+    st.stop()
 
 if password != section_password:
     st.error("Contraseña incorrecta")

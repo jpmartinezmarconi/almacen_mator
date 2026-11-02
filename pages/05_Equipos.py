@@ -25,11 +25,14 @@ if not st.session_state.get("equipos_autorizado"):
         for key in ("EQUIPOS_PASSWORD", "EQUIPOS_PASSWORD_ADICIONAL")
         if (configured_password := get_password(key)) is not None
     }
+    password = st.text_input("Contraseña", type="password")
     if not passwords:
-        st.error("Las contraseñas de esta sección no están configuradas.")
+        st.error(
+            "Configura EQUIPOS_PASSWORD (y, opcionalmente, "
+            "EQUIPOS_PASSWORD_ADICIONAL) en las variables de entorno de Render."
+        )
         st.stop()
 
-    password = st.text_input("Contraseña", type="password")
     if password:
         if password in passwords:
             st.session_state.equipos_autorizado = True

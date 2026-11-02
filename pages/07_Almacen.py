@@ -45,11 +45,15 @@ if not st.session_state.get("almacen_virtual_autorizado"):
         )
         if (configured_password := get_password(key)) is not None
     }
+    password = st.text_input("Contraseña", type="password")
     if not passwords:
-        st.error("Las contraseñas de esta sección no están configuradas.")
+        st.error(
+            "Configura ALMACEN_VIRTUAL_PASSWORD (y, opcionalmente, "
+            "ALMACEN_VIRTUAL_PASSWORD_ADICIONAL o "
+            "ALMACEN_VIRTUAL_PASSWORD_TERCERA) en las variables de entorno de Render."
+        )
         st.stop()
 
-    password = st.text_input("Contraseña", type="password")
     if password:
         if password in passwords:
             st.session_state.almacen_virtual_autorizado = True
