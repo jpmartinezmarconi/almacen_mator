@@ -26,20 +26,32 @@ from utils.almacen import (
     transferir_material,
 )
 from utils.branding import mostrar_logo
+from utils.auth import get_password
 from utils.db import init_db
 from utils.mapa_almacen import crear_html_mapa
 
-
-PASSWORDS_ALMACEN = {"clave_almacenvirtual"}
 
 mostrar_logo()
 
 if not st.session_state.get("almacen_virtual_autorizado"):
     st.title("Almacen Virtual")
     st.info("Introduce una de las claves autorizadas para acceder a esta sección.")
+    passwords = {
+        configured_password
+        for key in (
+            "ALMACEN_VIRTUAL_PASSWORD",
+            "ALMACEN_VIRTUAL_PASSWORD_ADICIONAL",
+            "ALMACEN_VIRTUAL_PASSWORD_TERCERA",
+        )
+        if (configured_password := get_password(key)) is not None
+    }
+    if not passwords:
+        st.error("Las contraseñas de esta sección no están configuradas.")
+        st.stop()
+
     password = st.text_input("Contraseña", type="password")
     if password:
-        if password in PASSWORDS_ALMACEN:
+        if password in passwords:
             st.session_state.almacen_virtual_autorizado = True
             st.rerun()
         else:

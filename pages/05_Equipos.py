@@ -8,10 +8,10 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from utils.auth import get_password
 from utils.branding import mostrar_logo
 from utils.db import get_conn, init_db
 
-PASSWORDS_EQUIPOS = {"clave_equipos"}
 EQUIPO_COLUMNS = ["nombre", "cantidad", "numero_serie", "seccion"]
 
 mostrar_logo()
@@ -20,9 +20,18 @@ init_db()
 if not st.session_state.get("equipos_autorizado"):
     st.title("Equipos")
     st.info("Introduce la contraseña para acceder a esta sección.")
+    passwords = {
+        configured_password
+        for key in ("EQUIPOS_PASSWORD", "EQUIPOS_PASSWORD_ADICIONAL")
+        if (configured_password := get_password(key)) is not None
+    }
+    if not passwords:
+        st.error("Las contraseñas de esta sección no están configuradas.")
+        st.stop()
+
     password = st.text_input("Contraseña", type="password")
     if password:
-        if password in PASSWORDS_EQUIPOS:
+        if password in passwords:
             st.session_state.equipos_autorizado = True
             st.rerun()
         else:

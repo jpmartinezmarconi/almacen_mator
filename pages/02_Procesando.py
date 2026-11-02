@@ -10,6 +10,7 @@ from utils.almacen import (
     obtener_ubicaciones_materiales,
     procesar_albaran,
 )
+from utils.auth import get_password
 from utils.branding import mostrar_logo
 from utils.albaranes import (
     finalizar_albaranes_vencidos,
@@ -24,9 +25,14 @@ finalizar_albaranes_vencidos()
 iniciar_finalizador_automatico()
 st.title("Procesando Albaranes")
 
+section_password = get_password("ALBARANES_PASSWORD")
+if section_password is None:
+    st.error("La contraseña de esta sección no está configurada.")
+    st.stop()
+
 password = st.text_input("Contraseña", type="password")
 
-if password != "clave_procesando":
+if password != section_password:
     st.error("Contraseña incorrecta")
     st.stop()
 
