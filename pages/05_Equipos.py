@@ -11,7 +11,7 @@ import streamlit as st
 from utils.branding import mostrar_logo
 from utils.db import get_conn, init_db
 
-PASSWORDS_EQUIPOS = {"ju@n", "t@ny"}
+PASSWORDS_EQUIPOS = {"clave_equipos"}
 EQUIPO_COLUMNS = ["nombre", "cantidad", "numero_serie", "seccion"]
 
 mostrar_logo()
