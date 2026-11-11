@@ -11,6 +11,8 @@ from utils.almacen import (
     ajustar_stock,
     analizar_materiales_albaran,
     buscar_stock_materiales,
+    listar_almacenes,
+    listar_stock_ubicaciones,
     migrar_ubicaciones_estanteria,
     obtener_ubicaciones_materiales,
     procesar_albaran,
@@ -20,6 +22,7 @@ from utils.almacen import (
     transferir_material,
 )
 from utils.db import _init_sqlite
+from utils.inventario_exportacion import preparar_inventario
 
 
 @contextmanager
@@ -259,6 +262,25 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
         self.assertEqual(resultados_codigo[0][4], "SKU-ABC-123")
         self.assertEqual(resultados_codigo[0][1], "Sección N1")
         self.assertEqual(resultados_codigo[0][5] * resultados_codigo[0][6] + resultados_codigo[0][7], 7)
+
+    def test_inventario_exportado_usa_stock_activo_de_ambas_naves(self):
+        self._guardar_stock(1, 5, "SKU-A")
+        self._guardar_stock(2, 7, "SKU-A", espacios=0)
+        with conectar_db(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO almacen_ubicaciones (id, seccion_id, codigo, activa) "
+                "VALUES (3, 1, 'INACTIVA', 0)"
+            )
+        self._guardar_stock(3, 100, "SKU-A")
+
+        resumen, detalle = preparar_inventario(
+            listar_almacenes(), listar_stock_ubicaciones
+        )
+
+        self.assertEqual(resumen, [("Material A", "SKU-A", 12)])
+        self.assertEqual({fila[0] for fila in detalle}, {"Nave 1", "Nave 2"})
+        self.assertNotIn("INACTIVA", [fila[2] for fila in detalle])
+        self.assertEqual(next(fila[-1] for fila in detalle if fila[0] == "Nave 1"), 0)
 
     def test_entrada_valora_un_palet_como_tres_espacios(self):
         registrar_movimiento(

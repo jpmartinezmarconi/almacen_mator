@@ -55,6 +55,12 @@ The platform combines inventory management, warehouse mapping, capacity planning
 
 Virtual Warehouse
 Visual representation of warehouse sectors, pallet positions, and occupancy.
+The inventory can be downloaded as a print-ready Excel workbook or printed directly,
+for an individual warehouse or all warehouses. Both reports include a material and
+code summary and the stock detail by location.
+Virtual Warehouse access accepts any configured `ALMACEN_VIRTUAL_PASSWORD`,
+`ALMACEN_VIRTUAL_PASSWORD_ADICIONAL`, `ALMACEN_VIRTUAL_PASSWORD_TERCERA`, or
+`CEO_PASSWORD` environment variable. All grant the same access to this page.
 <img width="1893" height="889" alt="Captura de pantalla 2026-10-28 155229" src="https://github.com/user-attachments/assets/afb705f1-beaf-4900-b02b-fe4a4677dc62" />
 <img width="1898" height="907" alt="Captura de pantalla 2026-10-28 155253" src="https://github.com/user-attachments/assets/673282b6-28cb-4c9c-87c4-7954531b7e52" />
 

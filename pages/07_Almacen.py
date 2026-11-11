@@ -28,6 +28,11 @@ from utils.almacen import (
 from utils.branding import mostrar_logo
 from utils.auth import get_password
 from utils.db import init_db
+from utils.inventario_exportacion import (
+    crear_excel_inventario,
+    crear_html_impresion_inventario,
+    preparar_inventario,
+)
 from utils.mapa_almacen import crear_html_mapa
 
 
@@ -42,15 +47,16 @@ if not st.session_state.get("almacen_virtual_autorizado"):
             "ALMACEN_VIRTUAL_PASSWORD",
             "ALMACEN_VIRTUAL_PASSWORD_ADICIONAL",
             "ALMACEN_VIRTUAL_PASSWORD_TERCERA",
+            "CEO_PASSWORD",
         )
         if (configured_password := get_password(key)) is not None
     }
     password = st.text_input("Contraseña", type="password")
     if not passwords:
         st.error(
-            "Configura ALMACEN_VIRTUAL_PASSWORD (y, opcionalmente, "
-            "ALMACEN_VIRTUAL_PASSWORD_ADICIONAL o "
-            "ALMACEN_VIRTUAL_PASSWORD_TERCERA) en las variables de entorno de Render."
+            "Configura al menos una contraseña en las variables de entorno de Render: "
+            "ALMACEN_VIRTUAL_PASSWORD, ALMACEN_VIRTUAL_PASSWORD_ADICIONAL, "
+            "ALMACEN_VIRTUAL_PASSWORD_TERCERA o CEO_PASSWORD."
         )
         st.stop()
 
@@ -139,6 +145,51 @@ almacen_id = st.selectbox(
     ),
     key="almacen_seleccionado",
 )
+
+with st.expander("Descargar o imprimir inventario"):
+    seleccion_inventario = st.selectbox(
+        "Inventario",
+        options=[None] + [fila[0] for fila in almacenes],
+        format_func=lambda seleccionado: (
+            "Todas las naves" if seleccionado is None else next(
+                fila[1] for fila in almacenes if fila[0] == seleccionado
+            )
+        ),
+        key="inventario_exportacion",
+    )
+    almacenes_inventario = [
+        fila for fila in almacenes
+        if seleccion_inventario is None or fila[0] == seleccion_inventario
+    ]
+    titulo_inventario = (
+        "Todas las naves" if seleccion_inventario is None else almacenes_inventario[0][1]
+    )
+    resumen_inventario, detalle_inventario = preparar_inventario(
+        almacenes_inventario, listar_stock_ubicaciones
+    )
+    if not detalle_inventario:
+        st.info("No hay existencias en el inventario seleccionado.")
+    st.caption(
+        "El informe incluye un resumen por material y codigo y el detalle por ubicacion. "
+        "El Excel tambien esta preparado para imprimir."
+    )
+    nombre_archivo = (
+        "inventario_todas_las_naves.xlsx" if seleccion_inventario is None
+        else f"inventario_nave_{seleccion_inventario}.xlsx"
+    )
+    st.download_button(
+        "Descargar inventario Excel",
+        crear_excel_inventario(titulo_inventario, resumen_inventario, detalle_inventario),
+        nombre_archivo,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="descargar_inventario",
+    )
+    components.html(
+        crear_html_impresion_inventario(
+            titulo_inventario, resumen_inventario, detalle_inventario
+        ),
+        height=60,
+    )
 
 
 def formato_numero(valor):
