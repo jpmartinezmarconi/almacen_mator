@@ -110,3 +110,13 @@ Warehouse Process Modelling
 Business Logic Automation
 Real-Time Inventory Tracking
 Decision Support Systems
+
+Las fotos de preparación se guardan como archivos locales; Neon solo almacena
+su ruta. El servidor elimina las fotos a partir de los 7 días desde su captura
+y deja intactos los demás datos del albarán. Para fotos antiguas sin fecha de
+procesado se usa la fecha de modificación del archivo. La limpieza se ejecuta
+al arrancar el servicio y cada minuto mientras esté activo. El flujo
+`render-keepalive.yml` ayuda a despertar Render, pero una interrupción del
+servicio o del flujo puede retrasar la limpieza. Render gratuito tiene un
+sistema de archivos efímero, por lo que las fotos pueden desaparecer antes.
+En Render debe estar aplicado el comando de inicio de `render.yaml`.

@@ -5,9 +5,11 @@ from utils.albaranes import (
     iniciar_finalizador_automatico,
 )
 from utils.db import init_db
+from utils.limpieza_fotos import iniciar_limpieza_automatica
 
 init_db()
 finalizar_albaranes_vencidos()
+iniciar_limpieza_automatica()
 
 st.set_page_config(page_title="Almacén Mator", layout="wide")
 iniciar_finalizador_automatico()
