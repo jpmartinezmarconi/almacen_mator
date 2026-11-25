@@ -66,6 +66,10 @@ Virtual Warehouse access accepts any configured `ALMACEN_VIRTUAL_PASSWORD`,
 
 Inventory Control
 Real-time inventory updates after processing delivery notes.
+Delivery notes can be cancelled from Procesando with confirmation and a required
+comment. Previously deducted stock is returned to its original locations when
+capacity and stock metadata permit; otherwise cancellation is blocked for review.
+Cancelled notes and their reason remain visible in Finalizados and Reportes.
 <img width="1429" height="906" alt="Captura de pantalla 2026-10-28 155049" src="https://github.com/user-attachments/assets/4dd07fd7-0f7f-4bc6-9aaa-8fe41c88ff44" />
 <img width="1445" height="908" alt="Captura de pantalla 2026-10-28 155031" src="https://github.com/user-attachments/assets/7790c04d-184a-47f6-bce7-0196e0156507" />
 

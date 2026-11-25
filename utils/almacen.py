@@ -1260,7 +1260,7 @@ def procesar_albaran(albaran_id, observaciones, foto_preparacion, numero_serie):
         stock = conn.execute(
             "SELECT s.id, s.material, s.codigo_material, s.palets, "
             "s.unidades_por_palet, s.unidades_sueltas, u.id, u.codigo, "
-            "sec.nombre, a.nombre "
+            "sec.nombre, a.nombre, s.espacios_por_palet "
             "FROM almacen_stock s "
             "JOIN almacen_ubicaciones u ON u.id=s.ubicacion_id "
             "JOIN almacen_secciones sec ON sec.id=u.seccion_id "
@@ -1340,8 +1340,8 @@ def procesar_albaran(albaran_id, observaciones, foto_preparacion, numero_serie):
                 conn.execute(
                     "INSERT INTO almacen_movimientos "
                     "(fecha, tipo, ubicacion_id, material, codigo_material, palets, "
-                    "unidades_por_palet, unidades_sueltas, referencia, albaran_id) "
-                    "VALUES (?, 'salida', ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "unidades_por_palet, unidades_sueltas, referencia, albaran_id, espacios_por_palet) "
+                    "VALUES (?, 'salida', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         ahora(),
                         fila[6],
@@ -1352,6 +1352,7 @@ def procesar_albaran(albaran_id, observaciones, foto_preparacion, numero_serie):
                         sueltas_movimiento,
                         f"Pedido albaran #{albaran_id} - {fila[9]} / {fila[8]}",
                         albaran_id,
+                        fila[10],
                     ),
                 )
                 descuentos.append(
@@ -1394,6 +1395,103 @@ def procesar_albaran(albaran_id, observaciones, foto_preparacion, numero_serie):
             raise ValueError("El albaran ya no esta pendiente de procesar.")
         conn.commit()
         return {"descuentos": descuentos, "faltantes": faltantes}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def cancelar_albaran(albaran_id, comentario):
+    comentario = comentario.strip()
+    if not comentario:
+        raise ValueError("Indica un comentario para cancelar el albarán.")
+
+    conn = get_conn()
+    try:
+        actualizacion = conn.execute(
+            "UPDATE albaranes SET estado='cancelado', mensaje_final=CASE "
+            "WHEN COALESCE(mensaje_final, '')='' THEN ? "
+            "ELSE mensaje_final || ? END "
+            "WHERE id=? AND estado IN ('entrada', 'procesando')",
+            (
+                "Motivo de cancelación: " + comentario,
+                "\nMotivo de cancelación: " + comentario,
+                albaran_id,
+            ),
+        )
+        if actualizacion.rowcount != 1:
+            raise ValueError("El albarán ya no está pendiente o en Procesando.")
+
+        movimientos = conn.execute(
+            "SELECT ubicacion_id, material, codigo_material, palets, "
+            "unidades_por_palet, unidades_sueltas, espacios_por_palet "
+            "FROM almacen_movimientos WHERE albaran_id=? AND tipo='salida' "
+            "AND referencia LIKE ? ORDER BY id",
+            (albaran_id, f"Pedido albaran #{albaran_id} - %"),
+        ).fetchall()
+        for ubicacion_id, material, codigo, palets, upp, sueltas, espacios in movimientos:
+            bloqueo = conn.execute(
+                "UPDATE almacen_ubicaciones SET capacidad_palets=capacidad_palets "
+                "WHERE id=? AND activa=1",
+                (ubicacion_id,),
+            )
+            if bloqueo.rowcount != 1:
+                raise ValueError("No se puede devolver el material: la ubicación original no está activa.")
+            stock = conn.execute(
+                "SELECT id, palets, unidades_por_palet, unidades_sueltas, espacios_por_palet "
+                "FROM almacen_stock WHERE ubicacion_id=? AND material=? AND codigo_material=?",
+                (ubicacion_id, material, codigo),
+            ).fetchone()
+            unidades = palets * upp + sueltas
+            if stock:
+                stock_id, palets_actuales, upp_actual, sueltas_actuales, espacios_actual = stock
+                nuevos_palets, nuevas_sueltas = divmod(
+                    palets_actuales * upp_actual + sueltas_actuales + unidades, upp_actual
+                )
+                actualizado = conn.execute(
+                    "UPDATE almacen_stock SET palets=?, unidades_sueltas=?, actualizado=? "
+                    "WHERE id=? AND palets=? AND unidades_por_palet=? "
+                    "AND unidades_sueltas=? AND espacios_por_palet=?",
+                    (nuevos_palets, nuevas_sueltas, ahora(), stock_id, palets_actuales,
+                     upp_actual, sueltas_actuales, espacios_actual),
+                )
+                if actualizado.rowcount != 1:
+                    raise ValueError("El stock cambió durante la cancelación. Vuelve a intentarlo.")
+            else:
+                if espacios is None:
+                    raise ValueError(
+                        f"No se puede devolver {material}: el movimiento antiguo no registra "
+                        "los espacios por palet y ya no hay stock en la ubicación original. "
+                        "Revisa el inventario antes de cancelar."
+                    )
+                nuevos_palets, nuevas_sueltas = divmod(unidades, upp)
+                conn.execute(
+                    "INSERT INTO almacen_stock (ubicacion_id, material, codigo_material, "
+                    "palets, unidades_por_palet, unidades_sueltas, espacios_por_palet, actualizado) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (ubicacion_id, material, codigo, nuevos_palets, upp, nuevas_sueltas, espacios, ahora()),
+                )
+            capacidad = conn.execute(
+                "SELECT u.capacidad_palets, "
+                f"COALESCE(SUM({OCUPACION_POR_STOCK_SQL.format(alias='s')}), 0) "
+                "FROM almacen_ubicaciones u LEFT JOIN almacen_stock s ON s.ubicacion_id=u.id "
+                "WHERE u.id=? GROUP BY u.id, u.capacidad_palets",
+                (ubicacion_id,),
+            ).fetchone()
+            if capacidad[1] > capacidad[0]:
+                raise ValueError(
+                    f"No se puede devolver {material}: no hay capacidad en la ubicación original."
+                )
+            conn.execute(
+                "INSERT INTO almacen_movimientos "
+                "(fecha, tipo, ubicacion_id, material, codigo_material, palets, "
+                "unidades_por_palet, unidades_sueltas, referencia, albaran_id, espacios_por_palet) "
+                "VALUES (?, 'entrada', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (ahora(), ubicacion_id, material, codigo, palets, upp, sueltas,
+                 f"Cancelación albaran #{albaran_id}", albaran_id, espacios),
+            )
+        conn.commit()
     except Exception:
         conn.rollback()
         raise

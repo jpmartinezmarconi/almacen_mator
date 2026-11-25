@@ -150,8 +150,11 @@ def _init_postgres(connection):
         fecha TEXT NOT NULL, tipo TEXT NOT NULL, ubicacion_id INTEGER NOT NULL,
         material TEXT NOT NULL, codigo_material TEXT NOT NULL DEFAULT '', palets INTEGER NOT NULL DEFAULT 0,
         unidades_por_palet INTEGER NOT NULL DEFAULT 1, unidades_sueltas INTEGER NOT NULL DEFAULT 0,
-        referencia TEXT, albaran_id INTEGER, FOREIGN KEY (ubicacion_id) REFERENCES almacen_ubicaciones(id)
+        referencia TEXT, albaran_id INTEGER, espacios_por_palet INTEGER,
+        FOREIGN KEY (ubicacion_id) REFERENCES almacen_ubicaciones(id)
     )""")
+    if "espacios_por_palet" not in _postgres_columns(connection, "almacen_movimientos"):
+        cursor.execute("ALTER TABLE almacen_movimientos ADD COLUMN espacios_por_palet INTEGER")
     if "espacios_por_palet" not in _postgres_columns(connection, "almacen_stock"):
         cursor.execute(
             "ALTER TABLE almacen_stock ADD COLUMN espacios_por_palet INTEGER NOT NULL DEFAULT 1"
@@ -298,8 +301,14 @@ def _init_sqlite(connection):
         ubicacion_id INTEGER NOT NULL, material TEXT NOT NULL, codigo_material TEXT NOT NULL DEFAULT '',
         palets INTEGER NOT NULL DEFAULT 0, unidades_por_palet INTEGER NOT NULL DEFAULT 1,
         unidades_sueltas INTEGER NOT NULL DEFAULT 0, referencia TEXT, albaran_id INTEGER,
+        espacios_por_palet INTEGER,
         FOREIGN KEY (ubicacion_id) REFERENCES almacen_ubicaciones(id)
     )""")
+    movimiento_columns = {
+        row[1] for row in cur.execute("PRAGMA table_info(almacen_movimientos)").fetchall()
+    }
+    if "espacios_por_palet" not in movimiento_columns:
+        cur.execute("ALTER TABLE almacen_movimientos ADD COLUMN espacios_por_palet INTEGER")
     stock_columns = {
         row[1] for row in cur.execute("PRAGMA table_info(almacen_stock)").fetchall()
     }

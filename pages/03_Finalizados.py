@@ -15,7 +15,7 @@ cur = conn.cursor()
 
 empresa_filtro = st.text_input("Filtrar por empresa")
 nombre_filtro = st.text_input("Filtrar por nombre")
-estado_filtro = st.selectbox("Estado", ["todos", "entrada", "procesando", "finalizado"])
+estado_filtro = st.selectbox("Estado", ["todos", "entrada", "procesando", "finalizado", "cancelado"])
 buscar_historial = bool(empresa_filtro.strip() or nombre_filtro.strip())
 fecha_hoy = datetime.now(ZoneInfo("Europe/Madrid")).date().isoformat()
 
@@ -82,9 +82,15 @@ for albaran in resultados:
         else:
             st.caption("No hay un archivo Excel disponible para este albarán.")
 
-        if st.button(f"Finalizar definitivamente #{id_}"):
-            cur.execute("UPDATE albaranes SET estado='finalizado' WHERE id=?", (id_,))
+        if estado != "cancelado" and st.button(f"Finalizar definitivamente #{id_}"):
+            cur.execute(
+                "UPDATE albaranes SET estado='finalizado' WHERE id=? AND estado!='cancelado'",
+                (id_,),
+            )
             conn.commit()
+            if cur.rowcount != 1:
+                st.error("El albarán ya está cancelado y no se puede finalizar.")
+                continue
 
             try:
                 for linea in (materiales or "").split("\n"):

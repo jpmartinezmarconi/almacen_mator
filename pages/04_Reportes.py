@@ -19,7 +19,7 @@ cur = conn.cursor()
 
 estado_filtro = st.selectbox(
     "Filtrar por estado",
-    ["todos", "entrada", "procesando", "finalizado"],
+    ["todos", "entrada", "procesando", "finalizado", "cancelado"],
     index=0,
 )
 nombre_filtro = st.text_input("Buscar por nombre")

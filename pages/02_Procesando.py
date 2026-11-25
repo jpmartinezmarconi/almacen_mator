@@ -5,6 +5,7 @@ import streamlit as st
 from PIL import Image, ImageOps
 from utils.almacen import (
     analizar_materiales_albaran,
+    cancelar_albaran,
     clave_material_pedido,
     obtener_consumos_albaran,
     obtener_ubicaciones_materiales,
@@ -47,6 +48,39 @@ cur.execute("SELECT * FROM albaranes WHERE estado='procesando' ORDER BY id")
 en_proceso = cur.fetchall()
 conn.close()
 
+if "cancelacion_exitosa" in st.session_state:
+    st.success(st.session_state.pop("cancelacion_exitosa"))
+
+
+def mostrar_cancelacion(albaran_id, en_proceso=False):
+    clave = f"confirmar_cancelacion_{albaran_id}"
+    if not st.session_state.get(clave):
+        if st.button("Cancelar albarán", key=f"cancelar_{albaran_id}"):
+            st.session_state[clave] = True
+            st.rerun()
+        return
+
+    with st.form(key=f"form_cancelacion_{albaran_id}"):
+        st.warning(f"¿Estás seguro de que quieres cancelar el albarán #{albaran_id}?")
+        if en_proceso:
+            st.caption("El material descontado se devolverá a sus ubicaciones originales.")
+        motivo = st.text_area("Comentario de cancelación (obligatorio)")
+        confirmar = st.form_submit_button("Sí, cancelar albarán")
+        volver = st.form_submit_button("No, mantener albarán")
+        if volver:
+            st.session_state.pop(clave, None)
+            st.rerun()
+        if confirmar:
+            try:
+                cancelar_albaran(albaran_id, motivo)
+            except ValueError as error:
+                st.error(str(error))
+            else:
+                st.session_state.pop(clave, None)
+                st.session_state["cancelacion_exitosa"] = f"Albarán #{albaran_id} cancelado."
+                st.rerun()
+
+
 st.subheader("Albaranes pendientes")
 st.caption(f"Albaranes en procesando: {albaranes_en_proceso}/{MAX_ALBARANES_PROCESANDO}")
 
@@ -77,6 +111,7 @@ for albaran in pendientes:
         st.write(f"Materiales:\n{materiales}")
         st.write(f"Comentario: {comentario}")
         st.write(f"Entrega: {envio_recogida}")
+        mostrar_cancelacion(id_)
 
         pedidos = analizar_materiales_albaran(materiales)
         stock_por_material = obtener_ubicaciones_materiales(
@@ -238,3 +273,4 @@ for albaran in en_proceso:
             st.info("No se descontó material del inventario para este albarán.")
         if observaciones:
             st.write(f"Observaciones: {observaciones}")
+        mostrar_cancelacion(id_, en_proceso=True)

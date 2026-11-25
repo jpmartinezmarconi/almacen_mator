@@ -11,6 +11,7 @@ from utils.almacen import (
     ajustar_stock,
     analizar_materiales_albaran,
     buscar_stock_materiales,
+    cancelar_albaran,
     listar_almacenes,
     listar_stock_ubicaciones,
     migrar_ubicaciones_estanteria,
@@ -92,13 +93,15 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
                     unidades_por_palet INTEGER,
                     unidades_sueltas INTEGER,
                     referencia TEXT,
-                    albaran_id INTEGER
+                    albaran_id INTEGER,
+                    espacios_por_palet INTEGER
                 );
                 CREATE TABLE albaranes (
                     id INTEGER PRIMARY KEY,
                     materiales TEXT,
                     estado TEXT,
                     observaciones TEXT,
+                    mensaje_final TEXT,
                     foto_preparacion TEXT,
                     numero_serie TEXT,
                     procesado_en TEXT
@@ -132,6 +135,77 @@ class ProcesarAlbaranPrioridadNaveTest(unittest.TestCase):
                 "VALUES (?, 'Material A', ?, 0, 10, ?, ?, '2026-10-05')",
                 (ubicacion_id, codigo, unidades, espacios),
             )
+
+    def test_cancelar_pendiente_exige_comentario_y_conserva_el_motivo(self):
+        with self.assertRaisesRegex(ValueError, "comentario"):
+            cancelar_albaran(1, "  ")
+        with conectar_db(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT estado FROM albaranes").fetchone()[0], "entrada")
+
+        cancelar_albaran(1, "  Pedido incorrecto  ")
+        with conectar_db(self.db_path) as conn:
+            self.assertEqual(
+                conn.execute("SELECT estado, mensaje_final FROM albaranes").fetchone(),
+                ("cancelado", "Motivo de cancelación: Pedido incorrecto"),
+            )
+        with self.assertRaisesRegex(ValueError, "ya no"):
+            cancelar_albaran(1, "Otro motivo")
+
+    def test_cancelar_procesado_devuelve_solo_descuentos_y_conserva_espacios(self):
+        self._guardar_stock(1, 5)
+        self._guardar_stock(2, 3, espacios=0)
+        procesar_albaran(1, "", "", "")
+        with conectar_db(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO almacen_movimientos "
+                "(fecha, tipo, ubicacion_id, material, codigo_material, palets, "
+                "unidades_por_palet, unidades_sueltas, referencia, albaran_id) "
+                "VALUES ('2026', 'salida', 1, 'Otro', '', 0, 1, 1, 'Manual', 1)"
+            )
+        cancelar_albaran(1, "Pedido incorrecto")
+        with conectar_db(self.db_path) as conn:
+            stock = conn.execute(
+                "SELECT ubicacion_id, palets * unidades_por_palet + unidades_sueltas, "
+                "espacios_por_palet FROM almacen_stock ORDER BY ubicacion_id"
+            ).fetchall()
+            devoluciones = conn.execute(
+                "SELECT ubicacion_id, palets * unidades_por_palet + unidades_sueltas "
+                "FROM almacen_movimientos WHERE tipo='entrada' ORDER BY ubicacion_id"
+            ).fetchall()
+        self.assertEqual(stock, [(1, 5, 1), (2, 3, 0)])
+        self.assertEqual(devoluciones, [(1, 1), (2, 3)])
+        with self.assertRaisesRegex(ValueError, "ya no"):
+            cancelar_albaran(1, "Duplicado")
+
+    def test_cancelacion_sin_capacidad_revierte_todo(self):
+        self._guardar_stock(1, 5)
+        self._guardar_stock(2, 3)
+        procesar_albaran(1, "", "", "")
+        with conectar_db(self.db_path) as conn:
+            conn.execute("UPDATE almacen_ubicaciones SET capacidad_palets=0 WHERE id=2")
+        with self.assertRaisesRegex(ValueError, "capacidad"):
+            cancelar_albaran(1, "Pedido incorrecto")
+        with conectar_db(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT estado FROM albaranes").fetchone()[0], "procesando")
+            self.assertEqual(
+                conn.execute("SELECT ubicacion_id, unidades_sueltas FROM almacen_stock").fetchall(),
+                [(1, 4)],
+            )
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM almacen_movimientos WHERE tipo='entrada'").fetchone()[0],
+                0,
+            )
+
+    def test_cancelacion_movimiento_antiguo_sin_metadatos_no_inventa_espacios(self):
+        self._guardar_stock(2, 4)
+        procesar_albaran(1, "", "", "")
+        with conectar_db(self.db_path) as conn:
+            conn.execute("UPDATE almacen_movimientos SET espacios_por_palet=NULL")
+        with self.assertRaisesRegex(ValueError, "movimiento antiguo"):
+            cancelar_albaran(1, "Pedido incorrecto")
+        with conectar_db(self.db_path) as conn:
+            self.assertEqual(conn.execute("SELECT estado FROM albaranes").fetchone()[0], "procesando")
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM almacen_stock").fetchone()[0], 0)
 
     def test_resumen_almacen_excluye_las_16_secciones_spotcooler(self):
         nombres_spotcooler = (
