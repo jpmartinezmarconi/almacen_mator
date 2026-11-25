@@ -28,6 +28,13 @@ class PostgresCursor:
     def fetchone(self):
         return self._cursor.fetchone()
 
+    def close(self):
+        self._cursor.close()
+
+    @property
+    def description(self):
+        return self._cursor.description
+
     @property
     def rowcount(self):
         return self._cursor.rowcount
